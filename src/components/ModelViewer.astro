@@ -1,0 +1,20 @@
+---
+interface Props {
+  src: string;
+  poster?: string;
+  alt: string;
+}
+
+const { src, poster, alt } = Astro.props;
+---
+
+<model-viewer
+  src={src}
+  poster={poster}
+  alt={alt}
+  camera-controls
+  auto-rotate
+  shadow-intensity="1"
+  interaction-prompt="auto"
+  style="width:100%;height:100%;min-height:420px;background:#111"
+></model-viewer>

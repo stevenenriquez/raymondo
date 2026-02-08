@@ -1,0 +1,157 @@
+---
+import SiteLayout from '@components/SiteLayout.astro';
+---
+
+<SiteLayout title="Raymondo Admin" description="Admin dashboard for Raymondo portfolio content.">
+  <main class="admin-shell">
+    <header class="site-header">
+      <h1 class="brand">Raymondo Admin</h1>
+      <nav class="site-nav">
+        <a href="/">View Site</a>
+        <a href="mailto:hello@raymondo.design">Support</a>
+      </nav>
+    </header>
+
+    <p class="notice">
+      This route should be protected by Cloudflare Access. In local dev, set
+      <code>ALLOW_LOCAL_ADMIN=true</code> if needed.
+    </p>
+
+    <div class="admin-grid">
+      <section class="admin-panel">
+        <h2>Projects</h2>
+        <div class="admin-actions" style="margin-bottom:0.8rem;">
+          <button type="button" id="newGraphicBtn">New Graphic Project</button>
+          <button type="button" id="new3dBtn" class="btn secondary">New 3D Project</button>
+        </div>
+        <ul class="project-list" id="projectList"></ul>
+      </section>
+
+      <section class="admin-panel">
+        <h2>Project Editor</h2>
+        <div id="feedback"></div>
+        <form class="admin-form" id="projectForm">
+          <div class="form-grid">
+            <label>Project ID
+              <input type="text" name="id" readonly />
+            </label>
+            <label>Slug
+              <input type="text" name="slug" required placeholder="moro-studio-identity" />
+            </label>
+            <label>Title
+              <input type="text" name="title" required />
+            </label>
+            <label>Discipline
+              <select name="discipline" required>
+                <option value="graphic">Graphic</option>
+                <option value="3d">3D</option>
+              </select>
+            </label>
+            <label>Status
+              <select name="status">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </label>
+            <label>Year
+              <input type="number" name="year" min="1990" max="2100" />
+            </label>
+            <label>Sort Order
+              <input type="number" name="sortOrder" value="0" />
+            </label>
+            <label>Style Template
+              <select name="styleTemplate">
+                <option value="editorial">Editorial</option>
+                <option value="brutalist">Brutalist</option>
+                <option value="minimal-grid">Minimal Grid</option>
+              </select>
+            </label>
+          </div>
+
+          <label>Short Description
+            <textarea name="descriptionShort" required></textarea>
+          </label>
+
+          <label>Long Description
+            <textarea name="descriptionLong"></textarea>
+          </label>
+
+          <label>Theme Inspiration
+            <textarea name="themeInspiration"></textarea>
+          </label>
+
+          <div class="form-grid">
+            <label>Style Direction
+              <textarea name="styleDirection"></textarea>
+            </label>
+            <label>Typography Notes
+              <textarea name="typographyNotes"></textarea>
+            </label>
+            <label>Motif Summary
+              <textarea name="motifSummary"></textarea>
+            </label>
+            <label>Tooling Notes
+              <textarea name="toolingNotes"></textarea>
+            </label>
+            <label>Material Notes
+              <textarea name="materialNotes"></textarea>
+            </label>
+            <label>Palette (comma-separated hex)
+              <input type="text" name="palette" placeholder="#111111,#d65c3b,#f5f0e5" />
+            </label>
+            <label>Tags (comma-separated)
+              <input type="text" name="tags" placeholder="Branding,Editorial,3D" />
+            </label>
+          </div>
+
+          <div class="admin-actions">
+            <button type="submit">Save Project</button>
+            <button type="button" class="btn secondary" id="refreshBtn">Refresh</button>
+          </div>
+        </form>
+
+        <hr style="border:none;border-top:1px solid rgba(35, 27, 18, 0.14);margin:1rem 0;" />
+
+        <h2>Upload Assets</h2>
+        <p class="notice">Select a project, then upload images, posters, or 3D files.</p>
+        <div class="form-grid" style="margin-bottom:0.7rem;">
+          <label>Asset Kind
+            <select id="assetKind">
+              <option value="image">Image</option>
+              <option value="poster">Poster</option>
+              <option value="model3d">3D Model</option>
+            </select>
+          </label>
+          <label>Mark as featured
+            <select id="assetFeatured">
+              <option value="false">No</option>
+              <option value="true">Yes</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="dropzone" class="dropzone">
+          Drag and drop files here or
+          <label style="display:inline;cursor:pointer;text-decoration:underline;">
+            browse
+            <input id="fileInput" type="file" multiple style="display:none;" />
+          </label>
+        </div>
+
+        <p class="notice" id="uploadStatus"></p>
+
+        <h2 style="margin-top:1rem;">Manage Uploaded Assets</h2>
+        <p class="notice">Update alt text, caption, type, featured flag, and sort order per asset.</p>
+        <div id="assetList" style="display:grid;gap:0.6rem;"></div>
+
+        <hr style="border:none;border-top:1px solid rgba(35, 27, 18, 0.14);margin:1rem 0;" />
+
+        <div class="admin-actions">
+          <button type="button" id="publishBtn">Publish Snapshot</button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script is:inline type="module" src="/admin.js"></script>
+</SiteLayout>

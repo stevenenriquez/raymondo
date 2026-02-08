@@ -1,0 +1,130 @@
+---
+import ModelViewer from '@components/ModelViewer.astro';
+import SiteLayout from '@components/SiteLayout.astro';
+import { getAssetGroup, getCoverAsset, getPublishedProjects } from '@lib/catalog';
+
+export function getStaticPaths() {
+  return getPublishedProjects().map((project) => ({
+    params: { slug: project.slug },
+    props: { project }
+  }));
+}
+
+const { project } = Astro.props;
+const cover = getCoverAsset(project);
+const imageAssets = getAssetGroup(project, 'image');
+const modelAsset = getAssetGroup(project, 'model3d')[0];
+const posterAsset = getAssetGroup(project, 'poster')[0] ?? cover;
+const moodboard = imageAssets.filter((asset) => !cover || asset.id !== cover.id);
+const templateClass = `template-${project.styleTemplate}`;
+---
+
+<SiteLayout title={`${project.title} | Raymondo`} description={project.descriptionShort}>
+  <main class={`project-shell ${templateClass}`}>
+    <header class="site-header">
+      <h1 class="brand"><a href="/" style="text-decoration:none;">Raymondo</a></h1>
+      <nav class="site-nav">
+        <a href="/">Back to Work</a>
+        <a href="mailto:hello@raymondo.design">Contact</a>
+      </nav>
+    </header>
+
+    <section class="project-hero">
+      <p class="tag-row">
+        <span class="tag">{project.discipline === '3d' ? '3D Project' : 'Graphic Project'}</span>
+        {project.year && <span class="tag">{project.year}</span>}
+        {project.tags.map((tag) => <span class="tag">{tag}</span>)}
+      </p>
+      <h1>{project.title}</h1>
+      <p>{project.descriptionLong || project.descriptionShort}</p>
+    </section>
+
+    <section class="project-layout">
+      <article class="project-main">
+        <div class="media-stage">
+          {
+            project.discipline === '3d' && modelAsset ? (
+              <ModelViewer src={modelAsset.url} poster={posterAsset?.url} alt={modelAsset.altText || project.title} />
+            ) : cover ? (
+              <img src={cover.url} alt={cover.altText || project.title} />
+            ) : (
+              <div style="height:100%;display:grid;place-items:center;min-height:420px;">No media published yet.</div>
+            )
+          }
+        </div>
+      </article>
+
+      <aside class="project-panel">
+        <div class="panel-block">
+          <h3>Inspiration & Theme</h3>
+          <p>{project.themeInspiration || 'Add inspiration details in admin to enrich this section.'}</p>
+        </div>
+
+        <div class="panel-block">
+          <h3>Design DNA</h3>
+          <p>{project.styleDirection || 'No style direction notes yet.'}</p>
+        </div>
+
+        <div class="panel-block">
+          <h3>Typography Notes</h3>
+          <p>{project.typographyNotes || 'No typography notes yet.'}</p>
+        </div>
+
+        <div class="panel-block">
+          <h3>Motif Summary</h3>
+          <p>{project.motifSummary || 'No motif notes yet.'}</p>
+        </div>
+
+        {project.discipline === '3d' && (
+          <>
+            <div class="panel-block">
+              <h3>Tooling</h3>
+              <p>{project.toolingNotes || 'No tooling details yet.'}</p>
+            </div>
+            <div class="panel-block">
+              <h3>Material Notes</h3>
+              <p>{project.materialNotes || 'No material notes yet.'}</p>
+            </div>
+          </>
+        )}
+
+        <div class="panel-block">
+          <h3>Palette</h3>
+          <div class="palette">
+            {project.palette.length > 0 ? (
+              project.palette.map((color) => <span class="swatch" style={`background:${color}`} title={color}></span>)
+            ) : (
+              <p>No palette colors set.</p>
+            )}
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    {moodboard.length > 0 && (
+      <section>
+        <h2 style="font-family:var(--font-display);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;margin:1.2rem 0 0.7rem;">
+          Moodboard / Supporting Frames
+        </h2>
+        <div class="moodboard">
+          {moodboard.map((asset) => (
+            <figure>
+              <img src={asset.url} alt={asset.altText || `${project.title} supporting visual`} loading="lazy" />
+              {asset.caption && <figcaption>{asset.caption}</figcaption>}
+            </figure>
+          ))}
+        </div>
+      </section>
+    )}
+  </main>
+
+  {
+    project.discipline === '3d' && modelAsset && (
+      <script
+        is:inline
+        type="module"
+        src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
+      ></script>
+    )
+  }
+</SiteLayout>

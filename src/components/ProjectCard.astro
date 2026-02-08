@@ -1,0 +1,31 @@
+---
+import type { Asset, Project } from '@lib/types';
+
+interface Props {
+  project: Project;
+  coverAsset?: Asset;
+}
+
+const { project, coverAsset } = Astro.props;
+const href = `/projects/${project.slug}/`;
+---
+
+<a class="card" href={href} data-discipline={project.discipline}>
+  <div class="card-media">
+    {
+      coverAsset ? (
+        <img src={coverAsset.url} alt={coverAsset.altText || `${project.title} cover`} loading="lazy" />
+      ) : (
+        <div style="height:100%;display:grid;place-items:center;color:#5d554e;font-family:var(--font-display);">No cover yet</div>
+      )
+    }
+  </div>
+  <div class="card-body">
+    <p class="card-title">{project.title}</p>
+    <p class="card-meta">{project.descriptionShort}</p>
+    <div class="tag-row">
+      <span class="tag">{project.discipline === '3d' ? '3D' : 'Graphic'}</span>
+      {project.tags.slice(0, 3).map((tag) => <span class="tag">{tag}</span>)}
+    </div>
+  </div>
+</a>

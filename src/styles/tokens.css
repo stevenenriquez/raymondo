@@ -1,0 +1,19 @@
+:root {
+  --bg: #efe9dd;
+  --surface: #f7f2e8;
+  --text: #171411;
+  --muted: #5d554e;
+  --line: #cdc2b2;
+  --accent: #bf3d2f;
+  --accent-alt: #1f5d7a;
+  --chip-bg: #e3d8c8;
+  --chip-active: #171411;
+  --chip-active-text: #f8f5ef;
+  --shadow: 0 12px 28px rgba(34, 27, 20, 0.15);
+
+  --font-display: 'Syne', 'Avenir Next', 'Helvetica Neue', sans-serif;
+  --font-body: 'Newsreader', Georgia, serif;
+
+  --container: min(1240px, 92vw);
+  --radius: 14px;
+}

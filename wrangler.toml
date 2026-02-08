@@ -1,0 +1,12 @@
+name = "raymondo-portfolio"
+compatibility_date = "2026-02-08"
+pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "PORTFOLIO_DB"
+database_name = "raymondo"
+database_id = "25df897e-b421-41fe-92f7-ba250a68ad3f"
+
+[[r2_buckets]]
+binding = "PORTFOLIO_R2"
+bucket_name = "raymondo-portfolio-assets"
