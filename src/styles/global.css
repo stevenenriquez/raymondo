@@ -143,6 +143,10 @@ img {
   display: block;
 }
 
+.gallery-grid > [hidden] {
+  display: none !important;
+}
+
 .card {
   background: var(--surface);
   border: 1px solid rgba(35, 27, 18, 0.14);
@@ -898,6 +902,27 @@ textarea {
 
 .admin-v2-project-list {
   max-height: 66vh;
+}
+
+.admin-v2-project-entry {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.45rem;
+  align-items: start;
+}
+
+.admin-v2-project-select-wrap {
+  margin-top: 0.38rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.admin-v2-project-select {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent-alt);
 }
 
 .admin-v2-project-item.is-draggable .project-row {

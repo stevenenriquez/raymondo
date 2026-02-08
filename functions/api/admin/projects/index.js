@@ -8,19 +8,6 @@ import {
   parseArray
 } from '../../../lib/validators';
 
-function slugify(value) {
-  return String(value || '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
-
-function buildFallbackSlug(seedTitle = '') {
-  const base = slugify(seedTitle) || 'untitled-project';
-  return `${base}-${Date.now().toString(36)}`;
-}
-
 function validateProjectInput(body) {
   if (!ALLOWED_DISCIPLINES.has(body.discipline || 'graphic')) {
     return 'discipline must be graphic or 3d.';
@@ -42,8 +29,9 @@ function normalizeProject(body, existingProject) {
   const requestedTitle = String(body.title ?? '').trim();
   const title = hasTitle ? requestedTitle : String(existingProject?.title ?? '').trim();
 
+  const hasSlug = Object.prototype.hasOwnProperty.call(body, 'slug');
   const requestedSlug = String(body.slug ?? '').trim();
-  const slug = requestedSlug || existingProject?.slug || buildFallbackSlug(title);
+  const slug = hasSlug ? requestedSlug : String(existingProject?.slug ?? '').trim();
 
   return {
     id: body.id,
@@ -106,6 +94,9 @@ export async function onRequestPost(context) {
     : null;
 
   const payload = normalizeProject(body, existingProject);
+  if (!payload.slug) {
+    return json({ error: 'slug is required.' }, 400);
+  }
 
   try {
     const id = await upsertProject(context.env.PORTFOLIO_DB, payload);

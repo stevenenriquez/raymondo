@@ -26,6 +26,7 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
         <div class="admin-actions" style="margin-bottom:0.8rem;">
           <button type="button" id="newGraphicBtn">New Graphic</button>
           <button type="button" id="new3dBtn" class="btn secondary">New 3D</button>
+          <button type="button" id="bulkPublishBtn" class="btn secondary" disabled>Publish Selected (0)</button>
         </div>
 
         <label class="admin-v2-search-label">
@@ -74,7 +75,7 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
                 <input class="admin-v2-project-id-input" type="text" name="id" readonly />
               </label>
               <label>Slug
-                <input type="text" name="slug" placeholder="moro-studio-identity" />
+                <input type="text" name="slug" placeholder="moro-studio-identity" required />
               </label>
                 <label>Discipline
                 <select name="discipline" class="admin-v2-select-input">

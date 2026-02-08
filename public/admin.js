@@ -64,6 +64,7 @@ const state = {
   hasDirtyChanges: false,
   lastSavedFingerprint: '',
   dragProjectId: null,
+  selectedProjectIds: new Set(),
   selectedAssetId: null,
   dragAssetId: null,
   /** @type {Map<string, object>} */
@@ -80,6 +81,7 @@ const els = {
   feedback: document.getElementById('feedback'),
   newGraphicBtn: document.getElementById('newGraphicBtn'),
   new3dBtn: document.getElementById('new3dBtn'),
+  bulkPublishBtn: document.getElementById('bulkPublishBtn'),
   saveNowBtn: document.getElementById('saveNowBtn'),
   previewBtn: document.getElementById('previewBtn'),
   publishBtn: document.getElementById('publishBtn'),
@@ -604,6 +606,22 @@ function matchesProjectSearch(project) {
   return haystack.includes(query);
 }
 
+function getSelectedDraftProjects() {
+  return state.projects.filter((project) => project.status === 'draft' && state.selectedProjectIds.has(project.id));
+}
+
+function syncBulkPublishButton() {
+  const selectedCount = getSelectedDraftProjects().length;
+  els.bulkPublishBtn.textContent = `Publish Selected (${selectedCount})`;
+  els.bulkPublishBtn.disabled = selectedCount === 0;
+}
+
+function pruneSelectedProjects() {
+  const draftIds = new Set(state.projects.filter((project) => project.status === 'draft').map((project) => project.id));
+  state.selectedProjectIds = new Set([...state.selectedProjectIds].filter((id) => draftIds.has(id)));
+  syncBulkPublishButton();
+}
+
 function getProjectSortOrder(project) {
   const value = Number(project?.sortOrder ?? 0);
   return Number.isFinite(value) ? value : 0;
@@ -755,6 +773,7 @@ function resolveDropTargetIndex(overItem, pointerY) {
 
 function renderProjectList() {
   els.projectList.innerHTML = '';
+  pruneSelectedProjects();
 
   const draggable = canDragSortProjects();
   const visible = getSortedProjects().filter((project) => matchesProjectFilter(project) && matchesProjectSearch(project));
@@ -777,6 +796,31 @@ function renderProjectList() {
 
     const rowTone = projectReadinessClass(project);
     const dragHandle = draggable ? '<span class="admin-v2-drag-handle" aria-hidden="true">::</span>' : '';
+    const entry = document.createElement('div');
+    entry.className = 'admin-v2-project-entry';
+
+    const selectWrap = document.createElement('label');
+    selectWrap.className = 'admin-v2-project-select-wrap';
+    const selectInput = document.createElement('input');
+    selectInput.type = 'checkbox';
+    selectInput.className = 'admin-v2-project-select';
+    selectInput.title = 'Select draft for bulk publish';
+    selectInput.setAttribute('aria-label', `Select ${project.title || project.slug || 'project'} for bulk publish`);
+    selectInput.disabled = project.status !== 'draft';
+    selectInput.checked = project.status === 'draft' && state.selectedProjectIds.has(project.id);
+    selectInput.addEventListener('click', (event) => {
+      event.stopPropagation();
+    });
+    selectInput.addEventListener('change', () => {
+      if (selectInput.checked) {
+        state.selectedProjectIds.add(project.id);
+      } else {
+        state.selectedProjectIds.delete(project.id);
+      }
+      syncBulkPublishButton();
+    });
+    selectWrap.appendChild(selectInput);
+
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `project-row ${project.id === state.activeId ? 'active' : ''}`;
@@ -795,9 +839,13 @@ function renderProjectList() {
       selectProject(project.id).catch((error) => setFeedback('error', error.message));
     });
 
-    li.appendChild(button);
+    entry.appendChild(selectWrap);
+    entry.appendChild(button);
+    li.appendChild(entry);
     els.projectList.appendChild(li);
   }
+
+  syncBulkPublishButton();
 }
 
 function updateFilterButtons() {
@@ -929,6 +977,18 @@ async function saveProject(options = {}) {
 
   const { autosave = false, statusOverride, silent = false } = options;
   const payload = projectPayloadFromForm(statusOverride);
+  if (!payload.slug) {
+    state.hasDirtyChanges = true;
+    if (autosave) {
+      setSaveState('unsaved', 'Slug required');
+      return state.activeProject;
+    }
+    setSaveState('error');
+    if (!silent) {
+      setFeedback('error', 'Slug is required.');
+    }
+    throw new Error('Slug is required.');
+  }
 
   const nextFingerprint = payloadFingerprint(payload);
   if (autosave && !state.hasDirtyChanges && nextFingerprint === state.lastSavedFingerprint) {
@@ -1722,6 +1782,82 @@ async function publishSnapshot() {
   }
 }
 
+async function publishSelectedDraftProjects() {
+  let selectedDrafts = getSelectedDraftProjects();
+  if (selectedDrafts.length === 0) {
+    setFeedback('error', 'Select at least one draft project to publish.');
+    return;
+  }
+
+  clearFeedback();
+
+  if (state.hasDirtyChanges && state.activeId && state.selectedProjectIds.has(state.activeId)) {
+    await saveProject({ autosave: false, silent: true });
+    await selectProject(state.activeId);
+    selectedDrafts = getSelectedDraftProjects();
+  }
+
+  const blockedSelected = selectedDrafts.filter((project) => !project.readiness?.canPublish);
+  if (blockedSelected.length > 0) {
+    const names = blockedSelected.map((project) => project.title || project.slug || project.id).join(', ');
+    setFeedback('error', `Selected drafts have publish blockers: ${names}`);
+    return;
+  }
+
+  const dryRun = await api('/api/admin/publish', {
+    method: 'POST',
+    body: JSON.stringify({ dryRun: true })
+  });
+  const existingBlocked = (dryRun.readiness || []).filter((entry) => !entry.canPublish);
+  if (existingBlocked.length > 0) {
+    setFeedback('error', 'Cannot bulk publish while existing published projects have blockers.');
+    return;
+  }
+
+  const originalBulkLabel = els.bulkPublishBtn.textContent;
+  els.bulkPublishBtn.disabled = true;
+  els.bulkPublishBtn.textContent = 'Publishing...';
+  els.publishBtn.disabled = true;
+  els.mobilePublishBtn.disabled = true;
+
+  try {
+    for (const project of selectedDrafts) {
+      await api('/api/admin/projects', {
+        method: 'POST',
+        body: JSON.stringify({
+          id: project.id,
+          status: 'published',
+          autosave: true
+        })
+      });
+    }
+
+    const payload = await api('/api/admin/publish', {
+      method: 'POST',
+      body: JSON.stringify({})
+    });
+
+    const warnings = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' | ')}` : '';
+    setFeedback(
+      'success',
+      `Published ${selectedDrafts.length} selected draft(s). Snapshot: ${payload.snapshotKey}.${warnings}`
+    );
+
+    state.selectedProjectIds.clear();
+    await loadProjects();
+    if (state.activeId) {
+      await selectProject(state.activeId);
+    }
+  } catch (error) {
+    setFeedback('error', error.message);
+  } finally {
+    els.bulkPublishBtn.textContent = originalBulkLabel;
+    els.publishBtn.disabled = false;
+    els.mobilePublishBtn.disabled = false;
+    syncBulkPublishButton();
+  }
+}
+
 async function unpublishActiveProject() {
   if (!state.activeProject || !state.activeId) {
     setFeedback('error', 'Select a project first.');
@@ -1798,6 +1934,7 @@ function handleProjectFilterClick(event) {
 
 function handleProjectDragStart(event) {
   if (!canDragSortProjects()) return;
+  if (event.target.closest('.admin-v2-project-select-wrap')) return;
   const item = event.target.closest('li[data-project-id]');
   if (!item) return;
 
@@ -2067,6 +2204,10 @@ function wireEvents() {
 
   els.new3dBtn.addEventListener('click', () => {
     createProjectPreset('3d').catch((error) => setFeedback('error', error.message));
+  });
+
+  els.bulkPublishBtn.addEventListener('click', () => {
+    publishSelectedDraftProjects().catch((error) => setFeedback('error', error.message));
   });
 
   els.saveNowBtn.addEventListener('click', () => {
