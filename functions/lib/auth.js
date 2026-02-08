@@ -10,7 +10,9 @@ export function getAdminEmail(request, env) {
 
   const devHeader = request.headers.get('x-admin-email');
   const host = new URL(request.url).hostname;
-  const allowLocal = String(env.ALLOW_LOCAL_ADMIN || 'false').toLowerCase() === 'true';
+  const allowLocal =
+    String(env.ALLOW_LOCAL_ADMIN || 'false').toLowerCase() === 'true' ||
+    String(env.ALLOW_ADMIN_LOCAL || 'false').toLowerCase() === 'true';
 
   if (allowLocal && isLocalhost(host)) {
     return devHeader || 'local-admin@localhost';

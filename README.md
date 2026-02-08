@@ -29,13 +29,30 @@ Static-first portfolio for graphic design and 3D work, with an admin dashboard f
 npm install
 ```
 
-2. Build catalog and run Astro dev server:
+2. Run the site locally without Cloudflare tooling:
 
 ```bash
 npm run dev
 ```
 
+This is pure Astro dev (`astro dev`) and does not run Wrangler/Pages/D1/R2 locally.
+Because of that, `/api/admin/*` Cloudflare function routes are not available in this mode.
+
+Optional Cloudflare-parity local mode (runs Functions + local D1/R2 emulation):
+
+```bash
+npm run dev:cloudflare
+```
+
 If you want local admin access without Cloudflare Access, set `ALLOW_LOCAL_ADMIN=true` in `.env`.
+You can also set it inline when starting dev:
+
+```bash
+ALLOW_LOCAL_ADMIN=true npm run dev:cloudflare
+```
+
+`npm run dev:cloudflare` also applies local D1 migrations automatically before starting Pages dev.
+It also injects a local `UPLOAD_SIGNING_SECRET` fallback for signed upload URLs if one is not set.
 
 ## Environment variables
 
@@ -88,10 +105,11 @@ The APIs also verify `CF-Access-Authenticated-User-Email`.
 ## Publish workflow
 
 1. Login to `/admin`.
-2. Create or edit projects.
-3. Upload assets (image, poster, model3d).
-4. Save projects with `status=published`.
-5. Click **Publish Snapshot**.
+2. Create or select a project from the left list.
+3. Edit core content fields (`title`, `slug`, `discipline`, short/long descriptions). Draft edits autosave.
+4. Upload assets by drag/drop. Asset kind is inferred automatically (`image`, `poster`, `model3d`).
+5. Use **Run Preflight** or **Publish Snapshot** to check hard requirements before publish.
+6. Confirm publish in the preflight modal. The selected project is promoted to `published` and a snapshot is generated.
 
 Publish does:
 
@@ -99,6 +117,10 @@ Publish does:
 - Snapshot write to `published/catalog.json`
 - Snapshot history write to `published/history/*`
 - Optional trigger of Cloudflare Pages Deploy Hook
+
+Admin preflight endpoint:
+
+- `POST /api/admin/publish` with `{ "dryRun": true }` runs validation without writing snapshots.
 
 ## Notes
 

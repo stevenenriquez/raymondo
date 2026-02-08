@@ -1,5 +1,6 @@
 import { listProjects, upsertProject, getProjectById } from '../../../lib/db';
 import { json, readJson, methodNotAllowed } from '../../../lib/http';
+import { computeProjectReadiness } from '../../../lib/catalog';
 import {
   ALLOWED_DISCIPLINES,
   ALLOWED_STATUS,
@@ -53,7 +54,21 @@ function normalizeProject(body) {
 
 export async function onRequestGet(context) {
   const projects = await listProjects(context.env.PORTFOLIO_DB);
-  return json({ projects });
+  const projectsWithReadiness = await Promise.all(
+    projects.map(async (project) => {
+      const detailed = await getProjectById(context.env.PORTFOLIO_DB, project.id, context.env.ASSET_PUBLIC_BASE_URL);
+      const readiness = detailed
+        ? computeProjectReadiness(detailed)
+        : { canPublish: false, hardMissing: ['Project data unavailable.'], softMissing: [], discipline: project.discipline };
+
+      return {
+        ...project,
+        readiness
+      };
+    })
+  );
+
+  return json({ projects: projectsWithReadiness });
 }
 
 export async function onRequestPost(context) {
@@ -68,7 +83,12 @@ export async function onRequestPost(context) {
   try {
     const id = await upsertProject(context.env.PORTFOLIO_DB, payload);
     const project = await getProjectById(context.env.PORTFOLIO_DB, id, context.env.ASSET_PUBLIC_BASE_URL);
-    return json({ project }, 200);
+    if (!project) {
+      return json({ error: 'Saved project could not be loaded.' }, 500);
+    }
+
+    const readiness = computeProjectReadiness(project);
+    return json({ project: { ...project, readiness }, autosave: body?.autosave === true }, 200);
   } catch (dbError) {
     const message = String(dbError?.message || 'Failed to save project.');
     if (message.includes('UNIQUE constraint failed: projects.slug')) {

@@ -46,3 +46,24 @@ export interface Catalog {
   generatedAt: string;
   projects: Project[];
 }
+
+export interface PublishReadiness {
+  canPublish: boolean;
+  hardMissing: string[];
+  softMissing: string[];
+  discipline: Discipline;
+}
+
+export interface AdminProjectSummary {
+  id: string;
+  slug: string;
+  title: string;
+  discipline: Discipline;
+  status: ProjectStatus;
+  sortOrder: number;
+  readiness: PublishReadiness;
+}
+
+export interface AdminProject extends Project {
+  readiness: PublishReadiness;
+}

@@ -1,15 +1,28 @@
 import { buildPublishedCatalog } from '../../lib/catalog';
-import { json, methodNotAllowed } from '../../lib/http';
+import { json, readJson, methodNotAllowed } from '../../lib/http';
 
 export async function onRequestPost(context) {
-  const { errors, snapshot } = await buildPublishedCatalog(context.env);
-  if (errors.length > 0) {
-    return json({ error: 'Publish validation failed.', errors }, 422);
+  const requestBody = await readJson(context.request);
+  const dryRun = requestBody?.dryRun === true;
+  const { errors, readinessByProject, snapshot } = await buildPublishedCatalog(context.env);
+
+  if (dryRun) {
+    return json({
+      ok: errors.length === 0,
+      dryRun: true,
+      projectCount: snapshot.projects.length,
+      errors,
+      readiness: readinessByProject
+    });
   }
 
-  const body = JSON.stringify(snapshot, null, 2);
+  if (errors.length > 0) {
+    return json({ error: 'Publish validation failed.', errors, readiness: readinessByProject }, 422);
+  }
+
+  const snapshotBody = JSON.stringify(snapshot, null, 2);
   const key = 'published/catalog.json';
-  await context.env.PORTFOLIO_R2.put(key, body, {
+  await context.env.PORTFOLIO_R2.put(key, snapshotBody, {
     httpMetadata: {
       contentType: 'application/json; charset=utf-8'
     }
@@ -17,7 +30,7 @@ export async function onRequestPost(context) {
 
   const timestamp = new Date().toISOString().replaceAll(':', '-');
   const historyKey = `published/history/catalog-${timestamp}.json`;
-  await context.env.PORTFOLIO_R2.put(historyKey, body, {
+  await context.env.PORTFOLIO_R2.put(historyKey, snapshotBody, {
     httpMetadata: {
       contentType: 'application/json; charset=utf-8'
     }
@@ -56,7 +69,8 @@ export async function onRequestPost(context) {
     snapshotKey: key,
     historyKey,
     deployTriggered,
-    warnings
+    warnings,
+    readiness: readinessByProject
   });
 }
 

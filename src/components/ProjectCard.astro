@@ -16,7 +16,7 @@ const href = `/projects/${project.slug}/`;
       coverAsset ? (
         <img src={coverAsset.url} alt={coverAsset.altText || `${project.title} cover`} loading="lazy" />
       ) : (
-        <div style="height:100%;display:grid;place-items:center;color:#5d554e;font-family:var(--font-display);">No cover yet</div>
+        <div class="card-empty">No cover yet</div>
       )
     }
   </div>

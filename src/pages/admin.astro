@@ -3,7 +3,7 @@ import SiteLayout from '@components/SiteLayout.astro';
 ---
 
 <SiteLayout title="Raymondo Admin" description="Admin dashboard for Raymondo portfolio content.">
-  <main class="admin-shell">
+  <main class="admin-shell admin-editor-shell admin-v2-shell">
     <header class="site-header">
       <h1 class="brand">Raymondo Admin</h1>
       <nav class="site-nav">
@@ -12,146 +12,219 @@ import SiteLayout from '@components/SiteLayout.astro';
       </nav>
     </header>
 
-    <p class="notice">
+    <p class="notice" style="margin-top:0.8rem;">
       This route should be protected by Cloudflare Access. In local dev, set
       <code>ALLOW_LOCAL_ADMIN=true</code> if needed.
     </p>
 
-    <div class="admin-grid">
-      <section class="admin-panel">
+    <div class="admin-workspace admin-v2-workspace">
+      <aside class="admin-panel admin-projects-panel admin-v2-projects">
         <h2>Projects</h2>
+
         <div class="admin-actions" style="margin-bottom:0.8rem;">
-          <button type="button" id="newGraphicBtn">New Graphic Project</button>
-          <button type="button" id="new3dBtn" class="btn secondary">New 3D Project</button>
+          <button type="button" id="newGraphicBtn">New Graphic</button>
+          <button type="button" id="new3dBtn" class="btn secondary">New 3D</button>
         </div>
-        <ul class="project-list" id="projectList"></ul>
-      </section>
 
-      <section class="admin-panel">
-        <h2>Project Editor</h2>
+        <label class="admin-v2-search-label">
+          Search
+          <input id="projectSearch" type="search" placeholder="Search title or slug" />
+        </label>
+
+        <div class="admin-v2-filter-row" id="projectFilterBar" role="group" aria-label="Project filters">
+          <button type="button" class="filter-chip" data-filter="all" aria-pressed="true">All</button>
+          <button type="button" class="filter-chip" data-filter="draft" aria-pressed="false">Draft</button>
+          <button type="button" class="filter-chip" data-filter="ready" aria-pressed="false">Ready</button>
+          <button type="button" class="filter-chip" data-filter="blocked" aria-pressed="false">Blocked</button>
+          <button type="button" class="filter-chip" data-filter="published" aria-pressed="false">Published</button>
+        </div>
+
+        <ul class="project-list admin-v2-project-list" id="projectList"></ul>
+      </aside>
+
+      <section class="admin-editor-region admin-v2-editor">
         <div id="feedback"></div>
-        <form class="admin-form" id="projectForm">
-          <div class="form-grid">
-            <label>Project ID
-              <input type="text" name="id" readonly />
-            </label>
-            <label>Slug
-              <input type="text" name="slug" required placeholder="moro-studio-identity" />
-            </label>
-            <label>Title
-              <input type="text" name="title" required />
-            </label>
-            <label>Discipline
-              <select name="discipline" required>
-                <option value="graphic">Graphic</option>
-                <option value="3d">3D</option>
-              </select>
-            </label>
-            <label>Status
-              <select name="status">
-                <option value="draft">Draft</option>
-                <option value="published">Published</option>
-              </select>
-            </label>
-            <label>Year
-              <input type="number" name="year" min="1990" max="2100" />
-            </label>
-            <label>Sort Order
-              <input type="number" name="sortOrder" value="0" />
-            </label>
-            <label>Style Template
-              <select name="styleTemplate">
-                <option value="editorial">Editorial</option>
-                <option value="brutalist">Brutalist</option>
-                <option value="minimal-grid">Minimal Grid</option>
-              </select>
-            </label>
-          </div>
 
-          <label>Short Description
-            <textarea name="descriptionShort" required></textarea>
-          </label>
+        <form class="admin-inline-form" id="projectForm" novalidate>
+          <section class="admin-panel admin-v2-toolbar" id="adminTopBar">
+            <div class="admin-v2-toolbar-meta">
+              <p class="admin-v2-project-label" id="activeProjectLabel">No project selected</p>
+              <div class="admin-v2-toolbar-badges">
+                <span id="projectStatusBadge" class="status-pill draft">draft</span>
+                <span id="saveStateChip" class="admin-v2-save-chip saved">Saved</span>
+              </div>
+            </div>
+            <div class="admin-actions">
+              <button type="button" class="btn secondary" id="saveNowBtn">Save Now</button>
+              <button type="button" id="publishBtn">Publish Snapshot</button>
+              <button type="button" class="btn ghost" id="unpublishBtn">Unpublish</button>
+              <button type="button" class="btn danger" id="deleteBtn">Delete Draft</button>
+            </div>
+          </section>
 
-          <label>Long Description
-            <textarea name="descriptionLong"></textarea>
-          </label>
+          <section class="admin-panel">
+            <h2>Content</h2>
+            <p class="notice">Core fields for drafting and publish readiness.</p>
 
-          <label>Theme Inspiration
-            <textarea name="themeInspiration"></textarea>
-          </label>
+            <div class="form-grid" style="margin-top:0.8rem;">
+              <label>Project ID
+                <input type="text" name="id" readonly />
+              </label>
+              <label>Slug
+                <input type="text" name="slug" placeholder="moro-studio-identity" />
+              </label>
+              <label>Discipline
+                <select name="discipline">
+                  <option value="graphic">Graphic</option>
+                  <option value="3d">3D</option>
+                </select>
+              </label>
+              <label>Style Template
+                <select name="styleTemplate">
+                  <option value="editorial">Editorial</option>
+                  <option value="brutalist">Brutalist</option>
+                  <option value="minimal-grid">Minimal Grid</option>
+                </select>
+              </label>
+            </div>
 
-          <div class="form-grid">
-            <label>Style Direction
-              <textarea name="styleDirection"></textarea>
+            <label style="margin-top:0.8rem;">Project Title
+              <input class="inline-input" type="text" name="title" placeholder="Project title" />
             </label>
-            <label>Typography Notes
-              <textarea name="typographyNotes"></textarea>
-            </label>
-            <label>Motif Summary
-              <textarea name="motifSummary"></textarea>
-            </label>
-            <label>Tooling Notes
-              <textarea name="toolingNotes"></textarea>
-            </label>
-            <label>Material Notes
-              <textarea name="materialNotes"></textarea>
-            </label>
-            <label>Palette (comma-separated hex)
-              <input type="text" name="palette" placeholder="#111111,#d65c3b,#f5f0e5" />
-            </label>
-            <label>Tags (comma-separated)
-              <input type="text" name="tags" placeholder="Branding,Editorial,3D" />
-            </label>
-          </div>
 
-          <div class="admin-actions">
-            <button type="submit">Save Project</button>
-            <button type="button" class="btn secondary" id="refreshBtn">Refresh</button>
-          </div>
+            <label style="margin-top:0.6rem;">Short Description
+              <textarea class="inline-textarea" name="descriptionShort" placeholder="One-line summary for cards and SEO"></textarea>
+            </label>
+
+            <label style="margin-top:0.6rem;">Long Description
+              <textarea class="inline-textarea" name="descriptionLong" placeholder="Project narrative for the public page"></textarea>
+            </label>
+
+            <details class="admin-v2-advanced" open>
+              <summary>Advanced: Taxonomy and Ordering</summary>
+              <div class="form-grid">
+                <label>Year
+                  <input type="number" name="year" min="1990" max="2100" />
+                </label>
+                <label>Sort Order
+                  <input type="number" name="sortOrder" value="0" />
+                </label>
+                <label>Tags (comma-separated)
+                  <input type="text" name="tags" placeholder="Branding,Editorial,3D" />
+                </label>
+                <label>Palette (comma-separated)
+                  <input type="text" name="palette" placeholder="#111111,#d65c3b,#f5f0e5" />
+                </label>
+              </div>
+              <div class="palette" id="palettePreview" style="margin-top:0.55rem;"></div>
+            </details>
+
+            <details class="admin-v2-advanced">
+              <summary>Advanced: Story and Process Notes</summary>
+              <div class="form-grid admin-v2-notes-grid">
+                <label>Inspiration and Theme
+                  <textarea class="inline-textarea" name="themeInspiration" placeholder="Theme inspiration notes"></textarea>
+                </label>
+                <label>Design DNA
+                  <textarea class="inline-textarea" name="styleDirection" placeholder="Visual direction, references, and tone"></textarea>
+                </label>
+                <label>Typography Notes
+                  <textarea class="inline-textarea" name="typographyNotes" placeholder="Type choices and rationale"></textarea>
+                </label>
+                <label>Motif Summary
+                  <textarea class="inline-textarea" name="motifSummary" placeholder="Key motifs and recurring visual elements"></textarea>
+                </label>
+                <label class="three-d-only">Tooling Notes
+                  <textarea class="inline-textarea" name="toolingNotes" placeholder="3D tools, workflow, render pipeline"></textarea>
+                </label>
+                <label class="three-d-only">Material Notes
+                  <textarea class="inline-textarea" name="materialNotes" placeholder="Materials, textures, and lighting notes"></textarea>
+                </label>
+              </div>
+            </details>
+          </section>
+
+          <section class="admin-assets-section admin-v2-assets" id="assetsSection">
+            <h2 class="admin-subheading">Assets</h2>
+            <p class="notice">Drop files to auto-attach with smart defaults. First usable visual becomes the cover if missing.</p>
+
+            <div id="dropzone" class="dropzone" style="margin-top:0.8rem;">
+              Drag and drop files here or
+              <label style="display:inline;cursor:pointer;text-decoration:underline;">
+                browse
+                <input id="fileInput" type="file" multiple style="display:none;" />
+              </label>
+            </div>
+
+            <p class="notice" id="uploadStatus" style="margin-top:0.6rem;"></p>
+            <div id="uploadQueue" class="upload-preview-grid admin-v2-upload-queue"></div>
+
+            <div class="admin-actions" style="margin-top:0.8rem;">
+              <button type="button" class="btn secondary" id="saveAllAssetsBtn">Save All Asset Edits</button>
+            </div>
+
+            <h3 class="admin-v2-asset-title">Manage Uploaded Assets</h3>
+            <div id="assetList" class="asset-editor-grid admin-v2-asset-list"></div>
+          </section>
+
+          <section class="admin-panel admin-v2-publish" id="publishPanel">
+            <h2>Publish</h2>
+            <p class="notice">Checklist below uses current server-side readiness rules.</p>
+
+            <div class="admin-v2-readiness-grid">
+              <article class="admin-v2-readiness-card" id="contentSection">
+                <h3>Hard Requirements</h3>
+                <ul id="hardMissingList" class="admin-v2-checklist"></ul>
+              </article>
+              <article class="admin-v2-readiness-card">
+                <h3>Quality Warnings</h3>
+                <ul id="softMissingList" class="admin-v2-checklist"></ul>
+              </article>
+            </div>
+
+            <div class="admin-actions" style="margin-top:0.7rem;">
+              <button type="button" class="btn secondary" id="preflightBtn">Run Preflight</button>
+            </div>
+            <p id="preflightSummary" class="notice" style="margin-top:0.5rem;"></p>
+          </section>
         </form>
 
-        <hr style="border:none;border-top:1px solid rgba(35, 27, 18, 0.14);margin:1rem 0;" />
-
-        <h2>Upload Assets</h2>
-        <p class="notice">Select a project, then upload images, posters, or 3D files.</p>
-        <div class="form-grid" style="margin-bottom:0.7rem;">
-          <label>Asset Kind
-            <select id="assetKind">
-              <option value="image">Image</option>
-              <option value="poster">Poster</option>
-              <option value="model3d">3D Model</option>
-            </select>
-          </label>
-          <label>Mark as featured
-            <select id="assetFeatured">
-              <option value="false">No</option>
-              <option value="true">Yes</option>
-            </select>
-          </label>
-        </div>
-
-        <div id="dropzone" class="dropzone">
-          Drag and drop files here or
-          <label style="display:inline;cursor:pointer;text-decoration:underline;">
-            browse
-            <input id="fileInput" type="file" multiple style="display:none;" />
-          </label>
-        </div>
-
-        <p class="notice" id="uploadStatus"></p>
-
-        <h2 style="margin-top:1rem;">Manage Uploaded Assets</h2>
-        <p class="notice">Update alt text, caption, type, featured flag, and sort order per asset.</p>
-        <div id="assetList" style="display:grid;gap:0.6rem;"></div>
-
-        <hr style="border:none;border-top:1px solid rgba(35, 27, 18, 0.14);margin:1rem 0;" />
-
-        <div class="admin-actions">
-          <button type="button" id="publishBtn">Publish Snapshot</button>
+        <div class="admin-v2-mobile-bar">
+          <button type="button" class="btn secondary" id="mobileSaveBtn">Save</button>
+          <button type="button" id="mobilePublishBtn">Publish</button>
+          <button type="button" class="btn ghost" id="mobileAssetsBtn">Add Assets</button>
         </div>
       </section>
     </div>
   </main>
 
+  <dialog id="preflightDialog" class="admin-v2-dialog">
+    <article class="admin-v2-dialog-card">
+      <h2>Publish Preflight</h2>
+      <p class="notice" id="preflightDialogIntro">Checking requirements...</p>
+
+      <div class="admin-v2-readiness-grid">
+        <article class="admin-v2-readiness-card">
+          <h3>Current Project Blockers</h3>
+          <ul id="modalHardList" class="admin-v2-checklist"></ul>
+        </article>
+        <article class="admin-v2-readiness-card">
+          <h3>Published Project Blockers</h3>
+          <ul id="modalGlobalList" class="admin-v2-checklist"></ul>
+        </article>
+      </div>
+
+      <div class="admin-actions" style="margin-top:1rem;justify-content:flex-end;">
+        <button type="button" class="btn secondary" id="preflightCancelBtn">Cancel</button>
+        <button type="button" id="preflightConfirmBtn">Publish Now</button>
+      </div>
+    </article>
+  </dialog>
+
   <script is:inline type="module" src="/admin.js"></script>
+  <script
+    is:inline
+    type="module"
+    src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
+  ></script>
 </SiteLayout>

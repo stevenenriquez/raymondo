@@ -220,6 +220,37 @@ export async function setProjectCoverAsset(db, projectId, coverAssetId) {
     .run();
 }
 
+export async function deleteDraftProject(db, projectId, r2Bucket) {
+  const existing = await db.prepare('SELECT id, status FROM projects WHERE id = ?').bind(projectId).first();
+  if (!existing) {
+    return { ok: false, reason: 'not_found' };
+  }
+
+  if (existing.status !== 'draft') {
+    return { ok: false, reason: 'not_draft' };
+  }
+
+  const assetRows = await db.prepare('SELECT r2_key FROM assets WHERE project_id = ?').bind(projectId).all();
+  const keys = (assetRows.results || []).map((row) => row.r2_key).filter(Boolean);
+
+  let r2DeleteError = null;
+  if (r2Bucket && keys.length > 0) {
+    try {
+      await r2Bucket.delete(keys);
+    } catch (error) {
+      r2DeleteError = String(error?.message || error || 'Failed to delete one or more objects from R2.');
+    }
+  }
+
+  await db.prepare('DELETE FROM projects WHERE id = ?').bind(projectId).run();
+
+  return {
+    ok: true,
+    deletedAssetCount: keys.length,
+    r2DeleteError
+  };
+}
+
 export async function listPublishedProjectsWithAssets(db, publicAssetBaseUrl) {
   const projects = await db
     .prepare(

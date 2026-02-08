@@ -4,8 +4,6 @@ import SiteLayout from '@components/SiteLayout.astro';
 import { getCoverAsset, getPublishedProjects } from '@lib/catalog';
 
 const projects = getPublishedProjects();
-const graphicProjects = projects.filter((project) => project.discipline === 'graphic');
-const threeDProjects = projects.filter((project) => project.discipline === '3d');
 ---
 
 <SiteLayout title="Raymondo Portfolio" description="Graphic and 3D design portfolio for Raymondo.">
@@ -33,21 +31,8 @@ const threeDProjects = projects.filter((project) => project.discipline === '3d')
         <button class="filter-chip" data-filter="graphic" aria-pressed="false" type="button">Graphic</button>
         <button class="filter-chip" data-filter="3d" aria-pressed="false" type="button">3D</button>
       </div>
-      <div class="discipline-group" data-discipline-group="graphic">
-        <h3 style="font-family:var(--font-display);text-transform:uppercase;letter-spacing:0.08em;font-size:0.84rem;margin:0.3rem 0 0.8rem;">
-          Graphic Design
-        </h3>
-        <div class="gallery-grid">
-          {graphicProjects.map((project) => <ProjectCard project={project} coverAsset={getCoverAsset(project)} />)}
-        </div>
-      </div>
-      <div class="discipline-group" data-discipline-group="3d">
-        <h3 style="font-family:var(--font-display);text-transform:uppercase;letter-spacing:0.08em;font-size:0.84rem;margin:0.3rem 0 0.8rem;">
-          3D Design
-        </h3>
-        <div class="gallery-grid">
-          {threeDProjects.map((project) => <ProjectCard project={project} coverAsset={getCoverAsset(project)} />)}
-        </div>
+      <div class="gallery-grid" id="galleryGrid">
+        {projects.map((project) => <ProjectCard project={project} coverAsset={getCoverAsset(project)} />)}
       </div>
     </section>
 
@@ -59,7 +44,7 @@ const threeDProjects = projects.filter((project) => project.discipline === '3d')
 
   <script>
     const chips = Array.from(document.querySelectorAll<HTMLButtonElement>('.filter-chip'));
-    const groups = Array.from(document.querySelectorAll<HTMLElement>('[data-discipline-group]'));
+    const cards = Array.from(document.querySelectorAll<HTMLElement>('#galleryGrid .card'));
 
     chips.forEach((chip) => {
       chip.addEventListener('click', () => {
@@ -69,10 +54,13 @@ const threeDProjects = projects.filter((project) => project.discipline === '3d')
           item.setAttribute('aria-pressed', item === chip ? 'true' : 'false');
         });
 
-        groups.forEach((group) => {
-          const discipline = group.dataset.disciplineGroup;
-          const match = filter === 'all' || discipline === filter;
-          group.style.display = match ? '' : 'none';
+        cards.forEach((card) => {
+          const match = filter === 'all' || card.dataset.discipline === filter;
+          if (match) {
+            card.removeAttribute('hidden');
+          } else {
+            card.setAttribute('hidden', '');
+          }
         });
       });
     });

@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "astro dev",
+    "dev:cloudflare": "npm run dev:pages",
+    "dev:pages": "npm run d1:migrate:local && npm run build && npx wrangler pages dev dist --binding ALLOW_LOCAL_ADMIN=${ALLOW_LOCAL_ADMIN:-${ALLOW_ADMIN_LOCAL:-false}} --binding UPLOAD_SIGNING_SECRET=${UPLOAD_SIGNING_SECRET:-local-dev-upload-signing-secret}",
+    "d1:migrate:local": "npx wrangler d1 execute raymondo --local --file=./migrations/0001_init.sql",
     "prebuild": "node scripts/prepare-catalog.mjs",
     "build": "astro build",
     "preview": "astro preview",
