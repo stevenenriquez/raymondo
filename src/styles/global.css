@@ -275,11 +275,14 @@ img {
 }
 
 .project-main .media-stage {
+  position: relative;
   min-height: 420px;
 }
 
-.project-main img,
-.project-main model-viewer {
+.project-main .media-stage > img,
+.project-main .media-stage > model-viewer {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
