@@ -20,7 +20,8 @@ export async function onRequestPost(context) {
 
   const projectPrefix = body.projectId ? String(body.projectId) : 'unassigned';
   const id = crypto.randomUUID();
-  const r2Key = `${projectPrefix}/${id}-${filename}`;
+  // Keep key as a single segment so Pages dynamic route `[key].js` resolves reliably.
+  const r2Key = `${projectPrefix}--${id}-${filename}`;
 
   const nowSeconds = Math.floor(Date.now() / 1000);
   const expires = nowSeconds + 10 * 60;

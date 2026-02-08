@@ -43,9 +43,7 @@ function mapAssetRow(row, publicAssetBaseUrl) {
     caption: row.caption,
     featured: Boolean(row.featured),
     sortOrder: Number(row.sort_order || 0),
-    url: publicAssetBaseUrl
-      ? `${publicAssetBaseUrl}?key=${safeKey}`
-      : `/api/assets?key=${safeKey}`
+    url: publicAssetBaseUrl ? `${publicAssetBaseUrl}/${safeKey}` : `/api/assets/${safeKey}`
   };
 }
 
