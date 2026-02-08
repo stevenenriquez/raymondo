@@ -43,25 +43,30 @@ const projects = getPublishedProjects();
   </main>
 
   <script>
-    const chips = Array.from(document.querySelectorAll<HTMLButtonElement>('.filter-chip'));
-    const cards = Array.from(document.querySelectorAll<HTMLElement>('#galleryGrid .card'));
+    const chips = Array.from(document.querySelectorAll('.filter-chip'));
+    const cards = Array.from(document.querySelectorAll('#galleryGrid .card'));
+
+    function applyFilter(nextFilter, activeChip) {
+      const filter = String(nextFilter || 'all').toLowerCase();
+
+      chips.forEach((item) => {
+        item.setAttribute('aria-pressed', item === activeChip ? 'true' : 'false');
+      });
+
+      cards.forEach((card) => {
+        const discipline = String(card.dataset.discipline || '').toLowerCase();
+        const match = filter === 'all' || discipline === filter;
+        if (match) {
+          card.removeAttribute('hidden');
+        } else {
+          card.setAttribute('hidden', '');
+        }
+      });
+    }
 
     chips.forEach((chip) => {
       chip.addEventListener('click', () => {
-        const filter = chip.dataset.filter;
-
-        chips.forEach((item) => {
-          item.setAttribute('aria-pressed', item === chip ? 'true' : 'false');
-        });
-
-        cards.forEach((card) => {
-          const match = filter === 'all' || card.dataset.discipline === filter;
-          if (match) {
-            card.removeAttribute('hidden');
-          } else {
-            card.setAttribute('hidden', '');
-          }
-        });
+        applyFilter(chip.dataset.filter, chip);
       });
     });
   </script>

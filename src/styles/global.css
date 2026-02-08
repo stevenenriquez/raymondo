@@ -14,23 +14,30 @@ body {
 
 html {
   background-color: var(--bg);
-  background:
-    radial-gradient(120% 90% at 10% 10%, rgba(191, 61, 47, 0.09), transparent),
-    radial-gradient(120% 90% at 95% 85%, rgba(31, 93, 122, 0.12), transparent),
-    linear-gradient(180deg, #f5efe5 0%, var(--bg) 58%, var(--bg) 100%);
 }
 
 body {
+  position: relative;
+  isolation: isolate;
   font-family: var(--font-body);
   color: var(--text);
+  background: transparent;
+  line-height: 1.5;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-color: var(--bg);
   background:
     radial-gradient(120% 90% at 10% 10%, rgba(191, 61, 47, 0.09), transparent),
     radial-gradient(120% 90% at 95% 85%, rgba(31, 93, 122, 0.12), transparent),
     linear-gradient(180deg, #f5efe5 0%, var(--bg) 58%, var(--bg) 100%);
-  line-height: 1.5;
-  min-height: 100vh;
-  min-height: 100dvh;
 }
 
 a {
