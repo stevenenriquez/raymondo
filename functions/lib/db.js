@@ -29,10 +29,7 @@ function mapProjectRow(row) {
 
 function mapAssetRow(row, publicAssetBaseUrl) {
   const key = String(row.r2_key);
-  const safeKey = key
-    .split('/')
-    .map((segment) => encodeURIComponent(segment))
-    .join('/');
+  const safeKey = encodeURIComponent(key);
 
   return {
     id: row.id,
