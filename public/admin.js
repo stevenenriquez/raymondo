@@ -64,6 +64,8 @@ const state = {
   hasDirtyChanges: false,
   lastSavedFingerprint: '',
   dragProjectId: null,
+  selectedAssetId: null,
+  dragAssetId: null,
   /** @type {Map<string, object>} */
   assetDrafts: new Map(),
   uploadQueue: [],
@@ -104,7 +106,6 @@ const els = {
   fileInput: document.getElementById('fileInput'),
   dropzone: document.getElementById('dropzone'),
   uploadStatus: document.getElementById('uploadStatus'),
-  uploadQueue: document.getElementById('uploadQueue'),
   assetList: document.getElementById('assetList'),
   assetsSection: document.getElementById('assetsSection'),
   mobileSaveBtn: document.getElementById('mobileSaveBtn'),
@@ -115,14 +116,6 @@ const els = {
 
 const MODEL_FILE_EXTENSIONS = ['.glb', '.gltf'];
 const CURRENT_YEAR = new Date().getFullYear();
-const PREVIEW_STATES = {
-  queued: 5,
-  signing: 20,
-  uploading: 65,
-  attaching: 90,
-  done: 100,
-  failed: 0
-};
 
 function setFeedback(type, text) {
   els.feedback.innerHTML = `<p class="feedback ${type}">${escapeHtml(text)}</p>`;
@@ -850,6 +843,8 @@ function populateForm(project) {
 function clearEditor() {
   state.activeId = null;
   state.activeProject = null;
+  state.selectedAssetId = null;
+  state.dragAssetId = null;
   state.assetDrafts = new Map();
 
   writeField('id', '');
@@ -1098,50 +1093,12 @@ function humanizeFilename(name) {
 }
 
 function clearUploadQueue() {
-  for (const item of state.uploadQueue) {
-    if (item.previewUrl) {
-      URL.revokeObjectURL(item.previewUrl);
-    }
-  }
   state.uploadQueue = [];
-  els.uploadQueue.innerHTML = '';
   els.uploadStatus.textContent = '';
 }
 
 function renderUploadQueue() {
-  els.uploadQueue.innerHTML = '';
-
-  if (!state.uploadQueue.length) return;
-
-  for (const item of state.uploadQueue) {
-    const card = document.createElement('article');
-    card.className = `upload-preview-item admin-v2-upload-card ${item.status}`;
-    card.dataset.queueId = item.id;
-
-    const progress = PREVIEW_STATES[item.status] ?? 0;
-    const errorRow = item.status === 'failed' ? `<p class="admin-v2-upload-error">${escapeHtml(item.error || 'Upload failed.')}</p>` : '';
-    const retryBtn =
-      item.status === 'failed'
-        ? '<button type="button" class="btn secondary" data-action="retry-upload">Retry</button>'
-        : '';
-
-    const mediaMarkup = item.previewUrl
-      ? `<img src="${escapeHtml(item.previewUrl)}" alt="${escapeHtml(item.file.name)}" loading="lazy" />`
-      : '<div class="upload-preview-placeholder">File</div>';
-
-    card.innerHTML = `
-      ${mediaMarkup}
-      <div class="upload-preview-meta">
-        <strong>${escapeHtml(item.file.name)}</strong>
-        <span>${escapeHtml(item.kind)} • ${escapeHtml(item.status)}</span>
-        <div class="admin-v2-progress"><span style="width:${progress}%"></span></div>
-        ${errorRow}
-        ${retryBtn}
-      </div>
-    `;
-
-    els.uploadQueue.appendChild(card);
-  }
+  // Upload queue cards were removed; assets appear only in "Manage Uploaded Assets".
 }
 
 function nextSortOrder(baseAssets, offset) {
@@ -1156,7 +1113,6 @@ async function uploadSingleQueueItem(item) {
   }
 
   item.status = 'signing';
-  renderUploadQueue();
 
   const mimeType = inferMimeType(item.file);
   const signed = await api('/api/admin/upload-url', {
@@ -1169,7 +1125,6 @@ async function uploadSingleQueueItem(item) {
   });
 
   item.status = 'uploading';
-  renderUploadQueue();
 
   const uploadResponse = await fetch(signed.uploadUrl, {
     method: 'PUT',
@@ -1183,7 +1138,6 @@ async function uploadSingleQueueItem(item) {
   }
 
   item.status = 'attaching';
-  renderUploadQueue();
 
   await api(`/api/admin/projects/${state.activeId}/assets`, {
     method: 'POST',
@@ -1199,7 +1153,6 @@ async function uploadSingleQueueItem(item) {
   });
 
   item.status = 'done';
-  renderUploadQueue();
 }
 
 async function processUploadQueue(items) {
@@ -1213,18 +1166,18 @@ async function processUploadQueue(items) {
     } catch (error) {
       item.status = 'failed';
       item.error = error.message;
-      renderUploadQueue();
     }
   }
 
   const failed = items.filter((item) => item.status === 'failed').length;
 
   if (failed > 0) {
-    setFeedback('warn', `${uploaded} uploaded, ${failed} failed. Retry failed files from the queue.`);
+    setFeedback('warn', `${uploaded} uploaded, ${failed} failed. Re-upload failed files from your device.`);
   } else {
     setFeedback('success', `Uploaded ${uploaded} file(s).`);
   }
 
+  state.uploadQueue = [];
   await selectProject(state.activeId);
 }
 
@@ -1240,7 +1193,6 @@ async function enqueueUploads(files) {
 
   const queuedKinds = [];
   const newItems = files.map((file, idx) => {
-    const previewUrl = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
     const kind = inferAssetKind(file, state.activeProject.discipline, state.activeProject.assets || [], queuedKinds);
     queuedKinds.push(kind);
 
@@ -1250,27 +1202,15 @@ async function enqueueUploads(files) {
       kind,
       status: 'queued',
       error: '',
-      previewUrl,
       sortOrder: nextSortOrder(state.activeProject.assets || [], idx)
     };
   });
 
-  state.uploadQueue.push(...newItems);
+  state.uploadQueue = [...newItems];
   renderUploadQueue();
 
   els.uploadStatus.textContent = `Uploading ${newItems.length} file(s)...`;
   await processUploadQueue(newItems);
-}
-
-async function retryUpload(queueId) {
-  const item = state.uploadQueue.find((entry) => entry.id === queueId);
-  if (!item) return;
-
-  item.status = 'queued';
-  item.error = '';
-  renderUploadQueue();
-
-  await processUploadQueue([item]);
 }
 
 function assetPreviewMarkup(asset, allAssets) {
@@ -1293,63 +1233,250 @@ function assetPreviewMarkup(asset, allAssets) {
   return `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || asset.r2Key)}" loading="lazy" />`;
 }
 
+function getAssetSortOrder(asset) {
+  const value = Number(asset?.sortOrder ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function compareAssetsByOrder(a, b) {
+  const orderDelta = getAssetSortOrder(a) - getAssetSortOrder(b);
+  if (orderDelta !== 0) return orderDelta;
+  return String(a?.id || '').localeCompare(String(b?.id || ''));
+}
+
+function getSortedAssets(assets = []) {
+  return [...assets].sort(compareAssetsByOrder);
+}
+
+function getAssetById(assetId) {
+  if (!assetId || !state.activeProject) return null;
+  return state.activeProject.assets.find((asset) => asset.id === assetId) || null;
+}
+
+function getResolvedAsset(asset) {
+  return {
+    ...asset,
+    ...(state.assetDrafts.get(asset.id) || {})
+  };
+}
+
+function getAssetThumbMarkup(asset, allAssets) {
+  if (asset.kind === 'model3d') {
+    const posterAsset = allAssets.find((item) => item.kind === 'poster');
+    if (posterAsset) {
+      return `<img src="${escapeHtml(posterAsset.url)}" alt="${escapeHtml(asset.altText || asset.r2Key)}" loading="lazy" />`;
+    }
+
+    return '<div class="admin-v2-asset-thumb-empty">3D</div>';
+  }
+
+  return `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || asset.r2Key)}" loading="lazy" />`;
+}
+
+function clearAssetDragState() {
+  state.dragAssetId = null;
+  els.assetList
+    .querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after')
+    .forEach((node) => node.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+}
+
+function patchActiveAssetSortOrders(sortMap) {
+  if (!state.activeProject || !sortMap || sortMap.size === 0) return;
+
+  state.activeProject = {
+    ...state.activeProject,
+    assets: state.activeProject.assets.map((asset) =>
+      sortMap.has(asset.id)
+        ? {
+            ...asset,
+            sortOrder: sortMap.get(asset.id)
+          }
+        : asset
+    )
+  };
+}
+
+async function persistAssetSortUpdates(updates) {
+  for (const update of updates) {
+    await api(`/api/admin/assets/${update.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ sortOrder: update.sortOrder })
+    });
+  }
+}
+
+function getRebalancedAssetOrder(sortedAssets) {
+  return sortedAssets.map((asset, index) => ({
+    id: asset.id,
+    sortOrder: (index + 1) * 100
+  }));
+}
+
+async function reorderAssetByDrop(assetId, targetIndex) {
+  if (!state.activeProject) return;
+
+  const sorted = getSortedAssets(state.activeProject.assets || []);
+  const moving = sorted.find((asset) => asset.id === assetId);
+  if (!moving) return;
+
+  const withoutMoving = sorted.filter((asset) => asset.id !== assetId);
+  const boundedTargetIndex = Math.max(0, Math.min(targetIndex, withoutMoving.length));
+  const prev = withoutMoving[boundedTargetIndex - 1] || null;
+  const next = withoutMoving[boundedTargetIndex] || null;
+  const reordered = [...withoutMoving];
+  reordered.splice(boundedTargetIndex, 0, moving);
+
+  let updates = [];
+  if (!prev && !next) {
+    updates = [{ id: assetId, sortOrder: 100 }];
+  } else if (!prev) {
+    updates = [{ id: assetId, sortOrder: getAssetSortOrder(next) - 100 }];
+  } else if (!next) {
+    updates = [{ id: assetId, sortOrder: getAssetSortOrder(prev) + 100 }];
+  } else {
+    const prevOrder = getAssetSortOrder(prev);
+    const nextOrder = getAssetSortOrder(next);
+    const gap = nextOrder - prevOrder;
+
+    if (gap > 0.000001) {
+      updates = [{ id: assetId, sortOrder: prevOrder + gap / 2 }];
+    } else {
+      updates = getRebalancedAssetOrder(reordered);
+    }
+  }
+
+  if (!updates.length) return;
+
+  try {
+    await persistAssetSortUpdates(updates);
+    patchActiveAssetSortOrders(new Map(updates.map((item) => [item.id, item.sortOrder])));
+    renderAssetEditors(state.activeProject.assets || []);
+    setFeedback('success', 'Asset order updated.');
+  } catch (error) {
+    setFeedback('error', error.message);
+    await selectProject(state.activeId);
+  }
+}
+
+function resolveAssetDropTargetIndex(overItem, pointerY) {
+  const ordered = getSortedAssets(state.activeProject?.assets || []);
+  const sourceIndex = ordered.findIndex((asset) => asset.id === state.dragAssetId);
+  if (sourceIndex === -1) return { ordered, targetIndex: -1 };
+
+  if (!overItem) {
+    return { ordered, targetIndex: ordered.length - 1 };
+  }
+
+  const overId = overItem.dataset.assetId;
+  const overIndex = ordered.findIndex((asset) => asset.id === overId);
+  if (overIndex === -1) return { ordered, targetIndex: -1 };
+
+  const rect = overItem.getBoundingClientRect();
+  const isAfter = pointerY >= rect.top + rect.height / 2;
+  let targetIndex = overIndex + (isAfter ? 1 : 0);
+
+  if (sourceIndex < targetIndex && overItem) {
+    targetIndex -= 1;
+  }
+
+  return { ordered, targetIndex };
+}
+
 function renderAssetEditors(assets) {
-  state.assetDrafts = new Map();
   els.assetList.innerHTML = '';
 
   if (!assets || assets.length === 0) {
+    state.selectedAssetId = null;
+    state.assetDrafts = new Map();
     els.assetList.innerHTML = '<p class="notice">No assets uploaded yet.</p>';
     return;
   }
 
-  for (const asset of assets) {
-    const wrapper = document.createElement('article');
-    wrapper.className = 'asset-editor admin-v2-asset-card';
-    wrapper.dataset.assetId = asset.id;
+  const sortedAssets = getSortedAssets(assets);
+  const hasSelected = state.selectedAssetId && sortedAssets.some((asset) => asset.id === state.selectedAssetId);
+  state.selectedAssetId = hasSelected ? state.selectedAssetId : sortedAssets[0].id;
 
-    wrapper.innerHTML = `
-      <div class="asset-editor-preview">${assetPreviewMarkup(asset, assets)}</div>
-      <div class="asset-editor-content">
-        <h4>${escapeHtml(asset.kind.toUpperCase())} • ${escapeHtml(asset.r2Key)}</h4>
-
-        <div class="form-grid admin-v2-asset-grid">
-          <label>Kind
-            <select name="kind">
-              <option value="image" ${asset.kind === 'image' ? 'selected' : ''}>Image</option>
-              <option value="poster" ${asset.kind === 'poster' ? 'selected' : ''}>Poster</option>
-              <option value="model3d" ${asset.kind === 'model3d' ? 'selected' : ''}>3D Model</option>
-            </select>
-          </label>
-          <label>Sort Order
-            <input type="number" name="sortOrder" value="${Number(asset.sortOrder || 0)}" />
-          </label>
-        </div>
-
-        <label>Alt Text
-          <input type="text" name="altText" value="${escapeHtml(asset.altText || '')}" />
-        </label>
-
-        <label>Caption
-          <textarea name="caption">${escapeHtml(asset.caption || '')}</textarea>
-        </label>
-
-        <div class="admin-actions">
-          <a class="btn ghost" href="${escapeHtml(asset.url)}" target="_blank" rel="noopener noreferrer">Open File</a>
-          <button type="button" data-action="set-cover" class="btn secondary">Set as Cover</button>
-          <button type="button" data-action="save-asset">Save</button>
-          <button type="button" data-action="delete-asset" class="btn danger">Delete</button>
-        </div>
-      </div>
-    `;
-
-    els.assetList.appendChild(wrapper);
+  const selectedAsset = sortedAssets.find((asset) => asset.id === state.selectedAssetId);
+  if (!selectedAsset) {
+    els.assetList.innerHTML = '<p class="notice">Select an asset to edit metadata.</p>';
+    return;
   }
+
+  const resolved = getResolvedAsset(selectedAsset);
+  const leadAssetId = sortedAssets[0]?.id || null;
+  const selectedIsCover = selectedAsset.id === leadAssetId;
+
+  els.assetList.innerHTML = `
+    <div class="admin-v2-asset-browser">
+      <ul class="admin-v2-asset-sort-list" aria-label="Asset order">
+        ${sortedAssets
+          .map((asset) => {
+            const active = asset.id === state.selectedAssetId ? 'active' : '';
+            const isCover = asset.id === leadAssetId;
+            return `
+              <li class="admin-v2-asset-sort-item ${active}" data-asset-id="${escapeHtml(asset.id)}" draggable="true">
+                <button type="button" class="admin-v2-asset-sort-btn" data-asset-select="${escapeHtml(asset.id)}">
+                  <span class="admin-v2-asset-thumb">${getAssetThumbMarkup(asset, sortedAssets)}</span>
+                  <span class="admin-v2-asset-sort-meta">
+                    <span class="admin-v2-asset-sort-head">
+                      <strong>${escapeHtml(asset.kind.toUpperCase())}</strong>
+                      ${isCover ? '<span class="admin-v2-cover-chip">Cover</span>' : ''}
+                    </span>
+                    <span>${escapeHtml(asset.r2Key)}</span>
+                  </span>
+                  <span class="admin-v2-drag-handle" aria-hidden="true">::</span>
+                </button>
+              </li>
+            `;
+          })
+          .join('')}
+      </ul>
+
+      <article class="asset-editor admin-v2-asset-card admin-v2-asset-detail" data-asset-id="${escapeHtml(selectedAsset.id)}">
+        <div class="asset-editor-preview">${assetPreviewMarkup(selectedAsset, sortedAssets)}</div>
+        <div class="asset-editor-content">
+          <h4>
+            ${escapeHtml(selectedAsset.kind.toUpperCase())} • ${escapeHtml(selectedAsset.r2Key)}
+            ${selectedIsCover ? '<span class="admin-v2-cover-chip">Cover</span>' : ''}
+          </h4>
+
+          <div class="form-grid admin-v2-asset-grid">
+            <label>Kind
+              <select name="kind">
+                <option value="image" ${resolved.kind === 'image' ? 'selected' : ''}>Image</option>
+                <option value="poster" ${resolved.kind === 'poster' ? 'selected' : ''}>Poster</option>
+                <option value="model3d" ${resolved.kind === 'model3d' ? 'selected' : ''}>3D Model</option>
+              </select>
+            </label>
+          </div>
+
+          <label>Alt Text
+            <input type="text" name="altText" value="${escapeHtml(resolved.altText || '')}" />
+          </label>
+
+          <label>Caption
+            <textarea name="caption">${escapeHtml(resolved.caption || '')}</textarea>
+          </label>
+
+          <div class="admin-actions">
+            <a class="btn ghost" href="${escapeHtml(selectedAsset.url)}" target="_blank" rel="noopener noreferrer">Open File</a>
+            <button type="button" data-action="set-cover" class="btn secondary">Set as Cover</button>
+            <button type="button" data-action="save-asset">Save</button>
+            <button type="button" data-action="delete-asset" class="btn danger">Delete</button>
+          </div>
+        </div>
+      </article>
+    </div>
+  `;
 }
 
 function readAssetCardPayload(card) {
+  const assetId = card?.dataset?.assetId;
+  const currentAsset = getAssetById(assetId);
+
   return {
     kind: card.querySelector('[name="kind"]').value,
-    sortOrder: Number(card.querySelector('[name="sortOrder"]').value || 0),
+    sortOrder: getAssetSortOrder(currentAsset),
     altText: card.querySelector('[name="altText"]').value,
     caption: card.querySelector('[name="caption"]').value
   };
@@ -1757,36 +1884,87 @@ function wireDropzone() {
     enqueueUploads(files).catch((error) => setFeedback('error', error.message));
     els.fileInput.value = '';
   });
-
-  els.uploadQueue.addEventListener('click', (event) => {
-    const retryBtn = event.target.closest('[data-action="retry-upload"]');
-    if (!retryBtn) return;
-
-    const card = retryBtn.closest('[data-queue-id]');
-    if (!card) return;
-
-    retryUpload(card.dataset.queueId).catch((error) => setFeedback('error', error.message));
-  });
 }
 
 function wireAssetEvents() {
   els.assetList.addEventListener('input', (event) => {
-    const card = event.target.closest('.admin-v2-asset-card');
+    const card = event.target.closest('.admin-v2-asset-detail');
     if (!card) return;
     markAssetCardDirty(card);
   });
 
   els.assetList.addEventListener('change', (event) => {
-    const card = event.target.closest('.admin-v2-asset-card');
+    const card = event.target.closest('.admin-v2-asset-detail');
     if (!card) return;
     markAssetCardDirty(card);
   });
 
+  els.assetList.addEventListener('dragstart', (event) => {
+    const item = event.target.closest('.admin-v2-asset-sort-item');
+    if (!item) return;
+
+    state.dragAssetId = item.dataset.assetId || null;
+    if (!state.dragAssetId) return;
+
+    item.classList.add('is-dragging');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', state.dragAssetId);
+    }
+  });
+
+  els.assetList.addEventListener('dragover', (event) => {
+    if (!state.dragAssetId) return;
+
+    const overItem = event.target.closest('.admin-v2-asset-sort-item');
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+
+    if (!overItem) return;
+    if (overItem.dataset.assetId === state.dragAssetId) return;
+
+    els.assetList
+      .querySelectorAll('.is-drop-before, .is-drop-after')
+      .forEach((node) => node.classList.remove('is-drop-before', 'is-drop-after'));
+
+    const rect = overItem.getBoundingClientRect();
+    const isAfter = event.clientY >= rect.top + rect.height / 2;
+    overItem.classList.add(isAfter ? 'is-drop-after' : 'is-drop-before');
+  });
+
+  els.assetList.addEventListener('drop', (event) => {
+    if (!state.dragAssetId) return;
+    event.preventDefault();
+
+    const draggedId = state.dragAssetId;
+    const overItem = event.target.closest('.admin-v2-asset-sort-item');
+    const { ordered, targetIndex } = resolveAssetDropTargetIndex(overItem, event.clientY);
+    const sourceIndex = ordered.findIndex((asset) => asset.id === draggedId);
+
+    clearAssetDragState();
+    if (targetIndex < 0 || sourceIndex < 0 || targetIndex === sourceIndex) return;
+
+    reorderAssetByDrop(draggedId, targetIndex).catch((error) => setFeedback('error', error.message));
+  });
+
+  els.assetList.addEventListener('dragend', () => {
+    clearAssetDragState();
+  });
+
   els.assetList.addEventListener('click', (event) => {
+    const selectBtn = event.target.closest('[data-asset-select]');
+    if (selectBtn) {
+      state.selectedAssetId = selectBtn.dataset.assetSelect || null;
+      renderAssetEditors(state.activeProject?.assets || []);
+      return;
+    }
+
     const actionBtn = event.target.closest('[data-action]');
     if (!actionBtn) return;
 
-    const card = actionBtn.closest('.admin-v2-asset-card');
+    const card = actionBtn.closest('.admin-v2-asset-detail');
     if (!card) return;
 
     if (actionBtn.dataset.action === 'save-asset') {
@@ -1797,8 +1975,16 @@ function wireAssetEvents() {
     }
 
     if (actionBtn.dataset.action === 'set-cover') {
-      saveAssetCard(card, { setCover: true })
-        .then(() => selectProject(state.activeId))
+      const assetId = card.dataset.assetId;
+      saveAssetCard(card, { setCover: true, silent: true })
+        .then(async () => {
+          if (assetId) {
+            await reorderAssetByDrop(assetId, 0);
+            state.selectedAssetId = assetId;
+          }
+          await selectProject(state.activeId);
+          setFeedback('success', 'Cover updated.');
+        })
         .catch((error) => setFeedback('error', error.message));
       return;
     }
