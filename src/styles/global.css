@@ -13,21 +13,21 @@ body {
 }
 
 html {
-  background-color: #e6dfd2;
+  background-color: var(--bg);
   background:
     radial-gradient(120% 90% at 10% 10%, rgba(191, 61, 47, 0.09), transparent),
     radial-gradient(120% 90% at 95% 85%, rgba(31, 93, 122, 0.12), transparent),
-    linear-gradient(180deg, #f5efe5 0%, var(--bg) 58%, #e6dfd2 100%);
+    linear-gradient(180deg, #f5efe5 0%, var(--bg) 58%, var(--bg) 100%);
 }
 
 body {
   font-family: var(--font-body);
   color: var(--text);
-  background-color: #e6dfd2;
+  background-color: var(--bg);
   background:
     radial-gradient(120% 90% at 10% 10%, rgba(191, 61, 47, 0.09), transparent),
     radial-gradient(120% 90% at 95% 85%, rgba(31, 93, 122, 0.12), transparent),
-    linear-gradient(180deg, #f5efe5 0%, var(--bg) 58%, #e6dfd2 100%);
+    linear-gradient(180deg, #f5efe5 0%, var(--bg) 58%, var(--bg) 100%);
   line-height: 1.5;
   min-height: 100vh;
   min-height: 100dvh;
@@ -824,6 +824,14 @@ textarea {
   .admin-workspace,
   .asset-editor {
     grid-template-columns: 1fr;
+  }
+
+  .project-main .media-stage {
+    min-height: clamp(240px, 62vw, 420px);
+  }
+
+  .project-main .media-stage > img {
+    object-fit: contain;
   }
 
   .form-grid {
