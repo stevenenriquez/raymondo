@@ -63,6 +63,7 @@ const state = {
   isPopulating: false,
   hasDirtyChanges: false,
   lastSavedFingerprint: '',
+  dragProjectId: null,
   /** @type {Map<string, object>} */
   assetDrafts: new Map(),
   uploadQueue: [],
@@ -78,6 +79,7 @@ const els = {
   newGraphicBtn: document.getElementById('newGraphicBtn'),
   new3dBtn: document.getElementById('new3dBtn'),
   saveNowBtn: document.getElementById('saveNowBtn'),
+  previewBtn: document.getElementById('previewBtn'),
   publishBtn: document.getElementById('publishBtn'),
   unpublishBtn: document.getElementById('unpublishBtn'),
   deleteBtn: document.getElementById('deleteBtn'),
@@ -87,7 +89,6 @@ const els = {
   palettePreview: document.getElementById('palettePreview'),
   hardMissingList: document.getElementById('hardMissingList'),
   softMissingList: document.getElementById('softMissingList'),
-  preflightBtn: document.getElementById('preflightBtn'),
   preflightSummary: document.getElementById('preflightSummary'),
   preflightDialog: document.getElementById('preflightDialog'),
   preflightDialogIntro: document.getElementById('preflightDialogIntro'),
@@ -95,19 +96,25 @@ const els = {
   preflightCancelBtn: document.getElementById('preflightCancelBtn'),
   modalHardList: document.getElementById('modalHardList'),
   modalGlobalList: document.getElementById('modalGlobalList'),
+  previewDialog: document.getElementById('previewDialog'),
+  previewDialogIntro: document.getElementById('previewDialogIntro'),
+  previewDialogContent: document.getElementById('previewDialogContent'),
+  previewCloseBtn: document.getElementById('previewCloseBtn'),
+  previewOpenRouteBtn: document.getElementById('previewOpenRouteBtn'),
   fileInput: document.getElementById('fileInput'),
   dropzone: document.getElementById('dropzone'),
   uploadStatus: document.getElementById('uploadStatus'),
   uploadQueue: document.getElementById('uploadQueue'),
   assetList: document.getElementById('assetList'),
-  saveAllAssetsBtn: document.getElementById('saveAllAssetsBtn'),
   assetsSection: document.getElementById('assetsSection'),
   mobileSaveBtn: document.getElementById('mobileSaveBtn'),
+  mobilePreviewBtn: document.getElementById('mobilePreviewBtn'),
   mobilePublishBtn: document.getElementById('mobilePublishBtn'),
   mobileAssetsBtn: document.getElementById('mobileAssetsBtn')
 };
 
 const MODEL_FILE_EXTENSIONS = ['.glb', '.gltf'];
+const CURRENT_YEAR = new Date().getFullYear();
 const PREVIEW_STATES = {
   queued: 5,
   signing: 20,
@@ -204,6 +211,12 @@ function parseOptionalNumber(value) {
   return Number.isFinite(num) ? num : null;
 }
 
+function resolveYearValue(value) {
+  if (value === null || value === undefined || value === '') return CURRENT_YEAR;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : CURRENT_YEAR;
+}
+
 function field(name) {
   return els.form.elements.namedItem(name);
 }
@@ -258,7 +271,7 @@ function projectPayloadFromForm(statusOverride) {
     discipline: readField('discipline') || 'graphic',
     status: statusOverride || state.activeProject?.status || 'draft',
     year: parseOptionalNumber(readField('year')),
-    sortOrder: Number(readField('sortOrder') || 0),
+    sortOrder: Number(state.activeProject?.sortOrder ?? 0),
     styleTemplate: readField('styleTemplate') || 'editorial',
     descriptionShort: String(readField('descriptionShort') || '').trim(),
     descriptionLong: String(readField('descriptionLong') || '').trim(),
@@ -271,6 +284,188 @@ function projectPayloadFromForm(statusOverride) {
     palette: normalizeCommaList(readField('palette')),
     tags: normalizeCommaList(readField('tags'))
   };
+}
+
+function getPreviewAssets(project) {
+  return [...(project.assets || [])]
+    .map((asset) => ({
+      ...asset,
+      ...(state.assetDrafts.get(asset.id) || {})
+    }))
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+}
+
+function getPreviewCoverAsset(project) {
+  const byId = project.coverAssetId
+    ? project.assets.find((asset) => asset.id === project.coverAssetId)
+    : null;
+
+  if (byId) return byId;
+  return project.assets.find((asset) => asset.featured) || project.assets[0] || null;
+}
+
+function getDraftPreviewProject() {
+  if (!state.activeProject) return null;
+
+  const payload = projectPayloadFromForm();
+  const assets = getPreviewAssets(state.activeProject);
+
+  return {
+    ...state.activeProject,
+    ...payload,
+    assets
+  };
+}
+
+function previewText(value, fallback) {
+  const text = String(value || '').trim();
+  return text || fallback;
+}
+
+function renderPreviewPalette(colors) {
+  const safeColors = (colors || [])
+    .map((token) => sanitizeSwatchColor(token))
+    .filter(Boolean);
+
+  if (safeColors.length === 0) {
+    return '<p>No palette colors set.</p>';
+  }
+
+  return safeColors
+    .map((color) => `<span class="swatch" style="background:${escapeHtml(color)}" title="${escapeHtml(color)}"></span>`)
+    .join('');
+}
+
+function buildProjectPreviewMarkup(project) {
+  const cover = getPreviewCoverAsset(project);
+  const imageAssets = project.assets.filter((asset) => asset.kind === 'image');
+  const modelAsset = project.assets.find((asset) => asset.kind === 'model3d');
+  const posterAsset = project.assets.find((asset) => asset.kind === 'poster') || cover;
+  const moodboard = imageAssets.filter((asset) => !cover || asset.id !== cover.id);
+  const templateClass = `template-${project.styleTemplate || 'editorial'}`;
+  const tags = (project.tags || [])
+    .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
+    .join('');
+  const yearTag = project.year ? `<span class="tag">${escapeHtml(project.year)}</span>` : '';
+
+  let mediaMarkup = '<div style="height:100%;display:grid;place-items:center;min-height:420px;">No media published yet.</div>';
+
+  if (project.discipline === '3d' && modelAsset) {
+    const posterAttr = posterAsset ? ` poster="${escapeHtml(posterAsset.url)}"` : '';
+    mediaMarkup = `
+      <model-viewer
+        src="${escapeHtml(modelAsset.url)}"
+        ${posterAttr}
+        alt="${escapeHtml(modelAsset.altText || project.title)}"
+        camera-controls
+        auto-rotate
+        shadow-intensity="1"
+        interaction-prompt="auto"
+        style="width:100%;height:100%;min-height:420px;background:#111"
+      ></model-viewer>
+    `;
+  } else if (cover) {
+    mediaMarkup = `<img src="${escapeHtml(cover.url)}" alt="${escapeHtml(cover.altText || project.title)}" />`;
+  }
+
+  const moodboardMarkup =
+    moodboard.length > 0
+      ? `
+      <section>
+        <h2 style="font-family:var(--font-display);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;margin:1.2rem 0 0.7rem;">
+          Moodboard / Supporting Frames
+        </h2>
+        <div class="moodboard">
+          ${moodboard
+            .map(
+              (asset) => `
+            <figure>
+              <img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || `${project.title} supporting visual`)}" loading="lazy" />
+              ${asset.caption ? `<figcaption>${escapeHtml(asset.caption)}</figcaption>` : ''}
+            </figure>
+          `
+            )
+            .join('')}
+        </div>
+      </section>
+    `
+      : '';
+
+  return `
+    <main class="project-shell ${templateClass}">
+      <header class="site-header">
+        <h1 class="brand"><a href="#" style="text-decoration:none;">Raymondo</a></h1>
+        <nav class="site-nav">
+          <a href="#">Back to Work</a>
+          <a href="#">Contact</a>
+        </nav>
+      </header>
+
+      <section class="project-hero">
+        <p class="tag-row">
+          <span class="tag">${project.discipline === '3d' ? '3D Project' : 'Graphic Project'}</span>
+          ${yearTag}
+          ${tags}
+        </p>
+        <h1>${escapeHtml(project.title || 'Untitled Project')}</h1>
+        <p>${escapeHtml(previewText(project.descriptionLong, project.descriptionShort || 'No description yet.'))}</p>
+      </section>
+
+      <section class="project-layout">
+        <article class="project-main">
+          <div class="media-stage">
+            ${mediaMarkup}
+          </div>
+        </article>
+
+        <aside class="project-panel">
+          <div class="panel-block">
+            <h3>Inspiration & Theme</h3>
+            <p>${escapeHtml(previewText(project.themeInspiration, 'Add inspiration details in admin to enrich this section.'))}</p>
+          </div>
+
+          <div class="panel-block">
+            <h3>Design DNA</h3>
+            <p>${escapeHtml(previewText(project.styleDirection, 'No style direction notes yet.'))}</p>
+          </div>
+
+          <div class="panel-block">
+            <h3>Typography Notes</h3>
+            <p>${escapeHtml(previewText(project.typographyNotes, 'No typography notes yet.'))}</p>
+          </div>
+
+          <div class="panel-block">
+            <h3>Motif Summary</h3>
+            <p>${escapeHtml(previewText(project.motifSummary, 'No motif notes yet.'))}</p>
+          </div>
+
+          ${
+            project.discipline === '3d'
+              ? `
+            <div class="panel-block">
+              <h3>Tooling</h3>
+              <p>${escapeHtml(previewText(project.toolingNotes, 'No tooling details yet.'))}</p>
+            </div>
+            <div class="panel-block">
+              <h3>Material Notes</h3>
+              <p>${escapeHtml(previewText(project.materialNotes, 'No material notes yet.'))}</p>
+            </div>
+          `
+              : ''
+          }
+
+          <div class="panel-block">
+            <h3>Palette</h3>
+            <div class="palette">
+              ${renderPreviewPalette(project.palette)}
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      ${moodboardMarkup}
+    </main>
+  `;
 }
 
 function payloadFingerprint(payload) {
@@ -416,10 +611,160 @@ function matchesProjectSearch(project) {
   return haystack.includes(query);
 }
 
+function getProjectSortOrder(project) {
+  const value = Number(project?.sortOrder ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function compareProjectsByOrder(a, b) {
+  const orderDelta = getProjectSortOrder(a) - getProjectSortOrder(b);
+  if (orderDelta !== 0) return orderDelta;
+
+  const titleDelta = String(a?.title || '').localeCompare(String(b?.title || ''));
+  if (titleDelta !== 0) return titleDelta;
+
+  return String(a?.id || '').localeCompare(String(b?.id || ''));
+}
+
+function getSortedProjects(projects = state.projects) {
+  return [...projects].sort(compareProjectsByOrder);
+}
+
+function canDragSortProjects() {
+  return state.projectFilter === 'all' && !state.projectSearch.trim();
+}
+
+function getNextProjectSortOrder() {
+  const sorted = getSortedProjects();
+  if (sorted.length === 0) return 100;
+  return getProjectSortOrder(sorted[sorted.length - 1]) + 100;
+}
+
+function clearProjectListDragState() {
+  state.dragProjectId = null;
+  els.projectList
+    .querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after')
+    .forEach((node) => node.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+}
+
+function patchProjectSortOrders(sortMap) {
+  if (!sortMap || sortMap.size === 0) return;
+
+  state.projects = state.projects.map((project) =>
+    sortMap.has(project.id)
+      ? {
+          ...project,
+          sortOrder: sortMap.get(project.id)
+        }
+      : project
+  );
+
+  if (state.activeProject && sortMap.has(state.activeProject.id)) {
+    state.activeProject = {
+      ...state.activeProject,
+      sortOrder: sortMap.get(state.activeProject.id)
+    };
+  }
+}
+
+async function persistProjectSortUpdates(updates) {
+  for (const update of updates) {
+    await api('/api/admin/projects', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: update.id,
+        sortOrder: update.sortOrder,
+        autosave: true
+      })
+    });
+  }
+}
+
+function getRebalancedProjectOrder(sortedProjects) {
+  return sortedProjects.map((project, index) => ({
+    id: project.id,
+    sortOrder: (index + 1) * 100
+  }));
+}
+
+async function reorderProjectByDrop(projectId, targetIndex) {
+  const sorted = getSortedProjects();
+  const moving = sorted.find((project) => project.id === projectId);
+  if (!moving) return;
+
+  const withoutMoving = sorted.filter((project) => project.id !== projectId);
+  const boundedTargetIndex = Math.max(0, Math.min(targetIndex, withoutMoving.length));
+  const prev = withoutMoving[boundedTargetIndex - 1] || null;
+  const next = withoutMoving[boundedTargetIndex] || null;
+
+  const reordered = [...withoutMoving];
+  reordered.splice(boundedTargetIndex, 0, moving);
+
+  let updates = [];
+  if (!prev && !next) {
+    updates = [{ id: projectId, sortOrder: 100 }];
+  } else if (!prev) {
+    updates = [{ id: projectId, sortOrder: getProjectSortOrder(next) - 100 }];
+  } else if (!next) {
+    updates = [{ id: projectId, sortOrder: getProjectSortOrder(prev) + 100 }];
+  } else {
+    const prevOrder = getProjectSortOrder(prev);
+    const nextOrder = getProjectSortOrder(next);
+    const gap = nextOrder - prevOrder;
+
+    if (gap > 0.000001) {
+      updates = [{ id: projectId, sortOrder: prevOrder + gap / 2 }];
+    } else {
+      updates = getRebalancedProjectOrder(reordered);
+    }
+  }
+
+  if (updates.length === 0) return;
+
+  setSaveState('saving', 'Reordering...');
+
+  try {
+    await persistProjectSortUpdates(updates);
+    patchProjectSortOrders(new Map(updates.map((item) => [item.id, item.sortOrder])));
+    renderProjectList();
+    setSaveState('saved');
+  } catch (error) {
+    setSaveState('error');
+    setFeedback('error', error.message);
+    await loadProjects();
+  }
+}
+
+function resolveDropTargetIndex(overItem, pointerY) {
+  const ordered = getSortedProjects().filter((project) => matchesProjectFilter(project) && matchesProjectSearch(project));
+  const draggedId = state.dragProjectId;
+  const sourceIndex = ordered.findIndex((project) => project.id === draggedId);
+  if (sourceIndex === -1) return { ordered, targetIndex: -1 };
+
+  if (!overItem) {
+    return { ordered, targetIndex: ordered.length - 1 };
+  }
+
+  const overId = overItem.dataset.projectId;
+  const overIndex = ordered.findIndex((project) => project.id === overId);
+  if (overIndex === -1) return { ordered, targetIndex: -1 };
+
+  const rect = overItem.getBoundingClientRect();
+  const isAfter = pointerY >= rect.top + rect.height / 2;
+  let targetIndex = overIndex + (isAfter ? 1 : 0);
+
+  if (sourceIndex < targetIndex && overItem) {
+    targetIndex -= 1;
+  }
+
+  return { ordered, targetIndex };
+}
+
 function renderProjectList() {
   els.projectList.innerHTML = '';
 
-  const visible = state.projects.filter((project) => matchesProjectFilter(project) && matchesProjectSearch(project));
+  const draggable = canDragSortProjects();
+  const visible = getSortedProjects().filter((project) => matchesProjectFilter(project) && matchesProjectSearch(project));
 
   if (visible.length === 0) {
     const li = document.createElement('li');
@@ -430,7 +775,15 @@ function renderProjectList() {
 
   for (const project of visible) {
     const li = document.createElement('li');
+    li.dataset.projectId = project.id;
+    li.className = 'admin-v2-project-item';
+    li.draggable = draggable;
+    if (draggable) {
+      li.classList.add('is-draggable');
+    }
+
     const rowTone = projectReadinessClass(project);
+    const dragHandle = draggable ? '<span class="admin-v2-drag-handle" aria-hidden="true">::</span>' : '';
     const button = document.createElement('button');
     button.type = 'button';
     button.className = `project-row ${project.id === state.activeId ? 'active' : ''}`;
@@ -440,7 +793,7 @@ function renderProjectList() {
         <span class="status-pill ${escapeHtml(getStatusClass(project.status))}">${escapeHtml(project.status)}</span>
       </div>
       <div class="admin-v2-row-foot">
-        <span>/${escapeHtml(project.slug)}</span>
+        <span>${dragHandle}/${escapeHtml(project.slug)}</span>
         <span class="admin-v2-readiness-pill ${rowTone}">${rowTone}</span>
       </div>
     `;
@@ -468,8 +821,7 @@ function populateForm(project) {
   writeField('slug', project.slug || '');
   writeField('title', project.title || '');
   writeField('discipline', project.discipline || 'graphic');
-  writeField('year', project.year ?? '');
-  writeField('sortOrder', project.sortOrder ?? 0);
+  writeField('year', resolveYearValue(project.year));
   writeField('styleTemplate', project.styleTemplate || 'editorial');
   writeField('descriptionShort', project.descriptionShort || '');
   writeField('descriptionLong', project.descriptionLong || '');
@@ -504,8 +856,7 @@ function clearEditor() {
   writeField('slug', '');
   writeField('title', '');
   writeField('discipline', 'graphic');
-  writeField('year', '');
-  writeField('sortOrder', 0);
+  writeField('year', CURRENT_YEAR);
   writeField('styleTemplate', 'editorial');
   writeField('descriptionShort', '');
   writeField('descriptionLong', '');
@@ -584,11 +935,6 @@ async function saveProject(options = {}) {
   const { autosave = false, statusOverride, silent = false } = options;
   const payload = projectPayloadFromForm(statusOverride);
 
-  if (!payload.slug || !payload.title) {
-    setSaveState('unsaved', 'Needs title and slug');
-    return null;
-  }
-
   const nextFingerprint = payloadFingerprint(payload);
   if (autosave && !state.hasDirtyChanges && nextFingerprint === state.lastSavedFingerprint) {
     return state.activeProject;
@@ -661,9 +1007,10 @@ async function createProjectPreset(discipline) {
       slug: `new-${suffix}-${now}`,
       discipline,
       status: 'draft',
+      year: CURRENT_YEAR,
       descriptionShort: '',
       descriptionLong: '',
-      sortOrder: 0,
+      sortOrder: getNextProjectSortOrder(),
       palette: [],
       tags: []
     })
@@ -990,6 +1337,7 @@ function renderAssetEditors(assets) {
           <a class="btn ghost" href="${escapeHtml(asset.url)}" target="_blank" rel="noopener noreferrer">Open File</a>
           <button type="button" data-action="set-cover" class="btn secondary">Set as Cover</button>
           <button type="button" data-action="save-asset">Save</button>
+          <button type="button" data-action="delete-asset" class="btn danger">Delete</button>
         </div>
       </div>
     `;
@@ -1040,28 +1388,27 @@ async function saveAssetCard(card, options = {}) {
   }
 }
 
-async function saveAllAssetDrafts() {
-  const dirtyCards = Array.from(els.assetList.querySelectorAll('.admin-v2-asset-card.is-dirty'));
-  if (dirtyCards.length === 0) {
-    setFeedback('warn', 'No unsaved asset edits found.');
-    return;
-  }
+async function deleteAssetCard(card) {
+  if (!card || !card.dataset.assetId || !state.activeId) return;
 
-  let saved = 0;
+  const assetId = card.dataset.assetId;
+  const confirmed = window.confirm('Delete this asset? This cannot be undone.');
+  if (!confirmed) return;
 
-  for (const card of dirtyCards) {
-    try {
-      await saveAssetCard(card, { silent: true });
-      saved += 1;
-    } catch (error) {
-      setFeedback('error', `Failed while saving assets: ${error.message}`);
-      await selectProject(state.activeId);
-      return;
-    }
+  clearFeedback();
+
+  const payload = await api(`/api/admin/assets/${assetId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({})
+  });
+
+  if (payload.warning) {
+    setFeedback('warn', `Asset deleted. R2 warning: ${payload.warning}`);
+  } else {
+    setFeedback('success', 'Asset deleted.');
   }
 
   await selectProject(state.activeId);
-  setFeedback('success', `Saved ${saved} asset edit(s).`);
 }
 
 function renderPreflightDialog(data) {
@@ -1103,6 +1450,51 @@ function closePreflightDialog() {
   }
 
   els.preflightDialog.removeAttribute('open');
+}
+
+function openPreviewDialog() {
+  if (typeof els.previewDialog.showModal === 'function') {
+    if (!els.previewDialog.open) {
+      els.previewDialog.showModal();
+    }
+    return;
+  }
+
+  els.previewDialog.setAttribute('open', '');
+}
+
+function closePreviewDialog() {
+  if (typeof els.previewDialog.close === 'function') {
+    if (els.previewDialog.open) {
+      els.previewDialog.close();
+    }
+    return;
+  }
+
+  els.previewDialog.removeAttribute('open');
+}
+
+function renderDraftPreview() {
+  const project = getDraftPreviewProject();
+  if (!project) {
+    setFeedback('error', 'Select a project first.');
+    return;
+  }
+
+  els.previewDialogIntro.textContent = `Previewing draft using template: ${project.styleTemplate || 'editorial'}.`;
+  els.previewDialogContent.innerHTML = buildProjectPreviewMarkup(project);
+
+  if (project.slug) {
+    els.previewOpenRouteBtn.href = `/projects/${encodeURIComponent(project.slug)}/`;
+    els.previewOpenRouteBtn.classList.remove('is-disabled');
+    els.previewOpenRouteBtn.removeAttribute('aria-disabled');
+  } else {
+    els.previewOpenRouteBtn.href = '#';
+    els.previewOpenRouteBtn.classList.add('is-disabled');
+    els.previewOpenRouteBtn.setAttribute('aria-disabled', 'true');
+  }
+
+  openPreviewDialog();
 }
 
 async function runPreflight(options = {}) {
@@ -1277,6 +1669,66 @@ function handleProjectFilterClick(event) {
   renderProjectList();
 }
 
+function handleProjectDragStart(event) {
+  if (!canDragSortProjects()) return;
+  const item = event.target.closest('li[data-project-id]');
+  if (!item) return;
+
+  state.dragProjectId = item.dataset.projectId || null;
+  if (!state.dragProjectId) return;
+
+  item.classList.add('is-dragging');
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', state.dragProjectId);
+  }
+}
+
+function handleProjectDragOver(event) {
+  if (!state.dragProjectId || !canDragSortProjects()) return;
+
+  const overItem = event.target.closest('li[data-project-id]');
+  event.preventDefault();
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  if (!overItem) return;
+  if (overItem.dataset.projectId === state.dragProjectId) return;
+
+  els.projectList
+    .querySelectorAll('.is-drop-before, .is-drop-after')
+    .forEach((node) => node.classList.remove('is-drop-before', 'is-drop-after'));
+
+  const rect = overItem.getBoundingClientRect();
+  const isAfter = event.clientY >= rect.top + rect.height / 2;
+  overItem.classList.add(isAfter ? 'is-drop-after' : 'is-drop-before');
+}
+
+function handleProjectDrop(event) {
+  if (!state.dragProjectId || !canDragSortProjects()) return;
+  event.preventDefault();
+
+  const draggedId = state.dragProjectId;
+  const overItem = event.target.closest('li[data-project-id]');
+  const { ordered, targetIndex } = resolveDropTargetIndex(overItem, event.clientY);
+  const sourceIndex = ordered.findIndex((project) => project.id === draggedId);
+
+  clearProjectListDragState();
+
+  if (targetIndex < 0 || sourceIndex < 0 || targetIndex === sourceIndex) {
+    return;
+  }
+
+  reorderProjectByDrop(draggedId, targetIndex).catch((error) => {
+    setFeedback('error', error.message);
+  });
+}
+
+function handleProjectDragEnd() {
+  clearProjectListDragState();
+}
+
 function filesFromDrop(event) {
   event.preventDefault();
   els.dropzone.classList.remove('dragging');
@@ -1348,6 +1800,11 @@ function wireAssetEvents() {
       saveAssetCard(card, { setCover: true })
         .then(() => selectProject(state.activeId))
         .catch((error) => setFeedback('error', error.message));
+      return;
+    }
+
+    if (actionBtn.dataset.action === 'delete-asset') {
+      deleteAssetCard(card).catch((error) => setFeedback('error', error.message));
     }
   });
 }
@@ -1383,6 +1840,29 @@ function wireDialogEvents() {
       closePreflightDialog();
     }
   });
+
+  els.previewCloseBtn.addEventListener('click', () => {
+    closePreviewDialog();
+  });
+
+  els.previewOpenRouteBtn.addEventListener('click', (event) => {
+    if (els.previewOpenRouteBtn.classList.contains('is-disabled')) {
+      event.preventDefault();
+    }
+  });
+
+  els.previewDialog.addEventListener('click', (event) => {
+    const rect = els.previewDialog.getBoundingClientRect();
+    const inDialog =
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom;
+
+    if (!inDialog) {
+      closePreviewDialog();
+    }
+  });
 }
 
 function wireEvents() {
@@ -1407,11 +1887,11 @@ function wireEvents() {
     saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
   });
 
-  els.publishBtn.addEventListener('click', () => {
-    runPreflight({ openModal: true }).catch((error) => setFeedback('error', error.message));
+  els.previewBtn.addEventListener('click', () => {
+    renderDraftPreview();
   });
 
-  els.preflightBtn.addEventListener('click', () => {
+  els.publishBtn.addEventListener('click', () => {
     runPreflight({ openModal: true }).catch((error) => setFeedback('error', error.message));
   });
 
@@ -1429,13 +1909,17 @@ function wireEvents() {
   });
 
   els.filterBar.addEventListener('click', handleProjectFilterClick);
-
-  els.saveAllAssetsBtn.addEventListener('click', () => {
-    saveAllAssetDrafts().catch((error) => setFeedback('error', error.message));
-  });
+  els.projectList.addEventListener('dragstart', handleProjectDragStart);
+  els.projectList.addEventListener('dragover', handleProjectDragOver);
+  els.projectList.addEventListener('drop', handleProjectDrop);
+  els.projectList.addEventListener('dragend', handleProjectDragEnd);
 
   els.mobileSaveBtn.addEventListener('click', () => {
     saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
+  });
+
+  els.mobilePreviewBtn.addEventListener('click', () => {
+    renderDraftPreview();
   });
 
   els.mobilePublishBtn.addEventListener('click', () => {

@@ -19,13 +19,13 @@ const href = `/projects/${project.slug}/`;
         <div class="card-empty">No cover yet</div>
       )
     }
-  </div>
-  <div class="card-body">
-    <p class="card-title">{project.title}</p>
-    <p class="card-meta">{project.descriptionShort}</p>
-    <div class="tag-row">
-      <span class="tag">{project.discipline === '3d' ? '3D' : 'Graphic'}</span>
-      {project.tags.slice(0, 3).map((tag) => <span class="tag">{tag}</span>)}
+    <div class="card-overlay">
+      <p class="card-title">{project.title}</p>
+      <p class="card-meta">{project.descriptionShort}</p>
+      <div class="tag-row">
+        <span class="tag">{project.discipline === '3d' ? '3D' : 'Graphic'}</span>
+        {project.tags.slice(0, 3).map((tag) => <span class="tag">{tag}</span>)}
+      </div>
     </div>
   </div>
 </a>

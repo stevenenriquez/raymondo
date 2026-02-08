@@ -1,5 +1,8 @@
 ---
 import SiteLayout from '@components/SiteLayout.astro';
+
+const currentYear = new Date().getFullYear();
+const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => currentYear - index);
 ---
 
 <SiteLayout title="Raymondo Admin" description="Admin dashboard for Raymondo portfolio content.">
@@ -13,8 +16,7 @@ import SiteLayout from '@components/SiteLayout.astro';
     </header>
 
     <p class="notice" style="margin-top:0.8rem;">
-      This route should be protected by Cloudflare Access. In local dev, set
-      <code>ALLOW_LOCAL_ADMIN=true</code> if needed.
+      Manage posts here.
     </p>
 
     <div class="admin-workspace admin-v2-workspace">
@@ -56,6 +58,7 @@ import SiteLayout from '@components/SiteLayout.astro';
             </div>
             <div class="admin-actions">
               <button type="button" class="btn secondary" id="saveNowBtn">Save Now</button>
+              <button type="button" class="btn secondary" id="previewBtn">Preview</button>
               <button type="button" id="publishBtn">Publish Snapshot</button>
               <button type="button" class="btn ghost" id="unpublishBtn">Unpublish</button>
               <button type="button" class="btn danger" id="deleteBtn">Delete Draft</button>
@@ -67,20 +70,20 @@ import SiteLayout from '@components/SiteLayout.astro';
             <p class="notice">Core fields for drafting and publish readiness.</p>
 
             <div class="form-grid" style="margin-top:0.8rem;">
-              <label>Project ID
-                <input type="text" name="id" readonly />
+              <label class="admin-v2-project-id">Project ID
+                <input class="admin-v2-project-id-input" type="text" name="id" readonly />
               </label>
               <label>Slug
                 <input type="text" name="slug" placeholder="moro-studio-identity" />
               </label>
-              <label>Discipline
-                <select name="discipline">
+                <label>Discipline
+                <select name="discipline" class="admin-v2-select-input">
                   <option value="graphic">Graphic</option>
                   <option value="3d">3D</option>
                 </select>
               </label>
               <label>Style Template
-                <select name="styleTemplate">
+                <select name="styleTemplate" class="admin-v2-select-input">
                   <option value="editorial">Editorial</option>
                   <option value="brutalist">Brutalist</option>
                   <option value="minimal-grid">Minimal Grid</option>
@@ -101,13 +104,14 @@ import SiteLayout from '@components/SiteLayout.astro';
             </label>
 
             <details class="admin-v2-advanced" open>
-              <summary>Advanced: Taxonomy and Ordering</summary>
+              <summary>Advanced: Taxonomy</summary>
               <div class="form-grid">
                 <label>Year
-                  <input type="number" name="year" min="1990" max="2100" />
-                </label>
-                <label>Sort Order
-                  <input type="number" name="sortOrder" value="0" />
+                  <select name="year" class="admin-v2-select-input">
+                    {yearOptions.map((year) => (
+                      <option value={year} selected={year === currentYear}>{year}</option>
+                    ))}
+                  </select>
                 </label>
                 <label>Tags (comma-separated)
                   <input type="text" name="tags" placeholder="Branding,Editorial,3D" />
@@ -159,10 +163,6 @@ import SiteLayout from '@components/SiteLayout.astro';
             <p class="notice" id="uploadStatus" style="margin-top:0.6rem;"></p>
             <div id="uploadQueue" class="upload-preview-grid admin-v2-upload-queue"></div>
 
-            <div class="admin-actions" style="margin-top:0.8rem;">
-              <button type="button" class="btn secondary" id="saveAllAssetsBtn">Save All Asset Edits</button>
-            </div>
-
             <h3 class="admin-v2-asset-title">Manage Uploaded Assets</h3>
             <div id="assetList" class="asset-editor-grid admin-v2-asset-list"></div>
           </section>
@@ -182,15 +182,13 @@ import SiteLayout from '@components/SiteLayout.astro';
               </article>
             </div>
 
-            <div class="admin-actions" style="margin-top:0.7rem;">
-              <button type="button" class="btn secondary" id="preflightBtn">Run Preflight</button>
-            </div>
             <p id="preflightSummary" class="notice" style="margin-top:0.5rem;"></p>
           </section>
         </form>
 
         <div class="admin-v2-mobile-bar">
           <button type="button" class="btn secondary" id="mobileSaveBtn">Save</button>
+          <button type="button" class="btn secondary" id="mobilePreviewBtn">Preview</button>
           <button type="button" id="mobilePublishBtn">Publish</button>
           <button type="button" class="btn ghost" id="mobileAssetsBtn">Add Assets</button>
         </div>
@@ -217,6 +215,20 @@ import SiteLayout from '@components/SiteLayout.astro';
       <div class="admin-actions" style="margin-top:1rem;justify-content:flex-end;">
         <button type="button" class="btn secondary" id="preflightCancelBtn">Cancel</button>
         <button type="button" id="preflightConfirmBtn">Publish Now</button>
+      </div>
+    </article>
+  </dialog>
+
+  <dialog id="previewDialog" class="admin-v2-dialog">
+    <article class="admin-v2-dialog-card admin-v2-preview-dialog-card">
+      <h2>Draft Preview</h2>
+      <p class="notice" id="previewDialogIntro">Previewing current editor values.</p>
+
+      <div id="previewDialogContent" class="admin-v2-preview-content"></div>
+
+      <div class="admin-actions" style="margin-top:1rem;justify-content:flex-end;">
+        <button type="button" class="btn secondary" id="previewCloseBtn">Close</button>
+        <a id="previewOpenRouteBtn" class="btn ghost" href="#" target="_blank" rel="noopener noreferrer">Open Public Route</a>
       </div>
     </article>
   </dialog>

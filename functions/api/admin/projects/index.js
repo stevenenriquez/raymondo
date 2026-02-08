@@ -8,11 +8,20 @@ import {
   parseArray
 } from '../../../lib/validators';
 
-function validateProjectInput(body) {
-  if (!body.slug || !body.title) {
-    return 'slug and title are required.';
-  }
+function slugify(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
 
+function buildFallbackSlug(seedTitle = '') {
+  const base = slugify(seedTitle) || 'untitled-project';
+  return `${base}-${Date.now().toString(36)}`;
+}
+
+function validateProjectInput(body) {
   if (!ALLOWED_DISCIPLINES.has(body.discipline || 'graphic')) {
     return 'discipline must be graphic or 3d.';
   }
@@ -28,27 +37,41 @@ function validateProjectInput(body) {
   return null;
 }
 
-function normalizeProject(body) {
+function normalizeProject(body, existingProject) {
+  const hasTitle = Object.prototype.hasOwnProperty.call(body, 'title');
+  const requestedTitle = String(body.title ?? '').trim();
+  const title = hasTitle ? requestedTitle : String(existingProject?.title ?? '').trim();
+
+  const requestedSlug = String(body.slug ?? '').trim();
+  const slug = requestedSlug || existingProject?.slug || buildFallbackSlug(title);
+
   return {
     id: body.id,
-    slug: String(body.slug || '').trim(),
-    title: String(body.title || '').trim(),
-    discipline: body.discipline || 'graphic',
-    coverAssetId: body.coverAssetId || null,
-    descriptionShort: String(body.descriptionShort || ''),
-    descriptionLong: String(body.descriptionLong || ''),
-    themeInspiration: String(body.themeInspiration || ''),
-    styleDirection: String(body.styleDirection || ''),
-    styleTemplate: body.styleTemplate || 'editorial',
-    typographyNotes: String(body.typographyNotes || ''),
-    motifSummary: String(body.motifSummary || ''),
-    toolingNotes: String(body.toolingNotes || ''),
-    materialNotes: String(body.materialNotes || ''),
-    palette: parseArray(body.palette),
-    tags: parseArray(body.tags),
-    status: body.status || 'draft',
-    year: typeof body.year === 'number' ? body.year : body.year ? Number(body.year) : null,
-    sortOrder: Number(body.sortOrder || 0)
+    slug,
+    title,
+    discipline: body.discipline || existingProject?.discipline || 'graphic',
+    coverAssetId: body.coverAssetId ?? existingProject?.coverAssetId ?? null,
+    descriptionShort: String(body.descriptionShort ?? existingProject?.descriptionShort ?? ''),
+    descriptionLong: String(body.descriptionLong ?? existingProject?.descriptionLong ?? ''),
+    themeInspiration: String(body.themeInspiration ?? existingProject?.themeInspiration ?? ''),
+    styleDirection: String(body.styleDirection ?? existingProject?.styleDirection ?? ''),
+    styleTemplate: body.styleTemplate || existingProject?.styleTemplate || 'editorial',
+    typographyNotes: String(body.typographyNotes ?? existingProject?.typographyNotes ?? ''),
+    motifSummary: String(body.motifSummary ?? existingProject?.motifSummary ?? ''),
+    toolingNotes: String(body.toolingNotes ?? existingProject?.toolingNotes ?? ''),
+    materialNotes: String(body.materialNotes ?? existingProject?.materialNotes ?? ''),
+    palette: body.palette === undefined ? existingProject?.palette || [] : parseArray(body.palette),
+    tags: body.tags === undefined ? existingProject?.tags || [] : parseArray(body.tags),
+    status: body.status || existingProject?.status || 'draft',
+    year:
+      body.year === undefined
+        ? existingProject?.year ?? null
+        : typeof body.year === 'number'
+          ? body.year
+          : body.year
+            ? Number(body.year)
+            : null,
+    sortOrder: body.sortOrder === undefined ? Number(existingProject?.sortOrder || 0) : Number(body.sortOrder || 0)
   };
 }
 
@@ -78,7 +101,11 @@ export async function onRequestPost(context) {
     return json({ error }, 400);
   }
 
-  const payload = normalizeProject(body);
+  const existingProject = body.id
+    ? await getProjectById(context.env.PORTFOLIO_DB, body.id, context.env.ASSET_PUBLIC_BASE_URL)
+    : null;
+
+  const payload = normalizeProject(body, existingProject);
 
   try {
     const id = await upsertProject(context.env.PORTFOLIO_DB, payload);
