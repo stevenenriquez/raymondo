@@ -123,7 +123,6 @@ const els = {
   assetList: document.getElementById('assetList'),
   mobileSaveBtn: document.getElementById('mobileSaveBtn'),
   mobilePreviewBtn: document.getElementById('mobilePreviewBtn'),
-  mobileRepublishBtn: document.getElementById('mobileRepublishBtn'),
   mobilePublishBtn: document.getElementById('mobilePublishBtn'),
   mobileDeleteBtn: document.getElementById('mobileDeleteBtn'),
   blockerDialog: document.getElementById('blockerDialog'),
@@ -313,17 +312,13 @@ function renderLivePendingState() {
   const pending = state.uiState.pendingLiveChanges;
 
   if (els.livePendingChip) {
-    els.livePendingChip.textContent = pending ? 'Live changes pending republish' : 'Live is up to date';
+    els.livePendingChip.textContent = pending ? 'Live changes pending sync' : 'Live is up to date';
     els.livePendingChip.classList.remove('pending', 'clean');
     els.livePendingChip.classList.add(pending ? 'pending' : 'clean');
   }
 
   if (els.republishSiteBtn) {
     els.republishSiteBtn.disabled = !pending;
-  }
-
-  if (els.mobileRepublishBtn) {
-    els.mobileRepublishBtn.disabled = !pending;
   }
 }
 
@@ -339,6 +334,16 @@ function clearLiveChangesPending() {
     state.uiState.pendingLiveChanges = false;
   }
   renderLivePendingState();
+}
+
+async function refreshPendingLiveChangesFromServer() {
+  try {
+    const payload = await api('/api/admin/deploy-status');
+    state.uiState.pendingLiveChanges = payload?.hasPendingChanges === true;
+    renderLivePendingState();
+  } catch {
+    // Keep local state if status check fails.
+  }
 }
 
 function projectPayloadFromForm(statusOverride, sortOrderOverride) {
@@ -938,12 +943,14 @@ async function openProject(id, options = {}) {
   if (!id) return;
 
   clearAutosaveTimer();
+  const previousProjectId = state.editorState.activeId;
+  const isSameProject = previousProjectId === id;
 
   const payload = await api(`/api/admin/projects/${id}`);
   state.editorState.activeId = id;
   state.editorState.activeProject = payload.project;
 
-  state.mediaState.selectedAssetId = null;
+  state.mediaState.selectedAssetId = isSameProject ? state.mediaState.selectedAssetId : null;
   state.mediaState.dragAssetId = null;
   state.mediaState.assetDrafts = new Map();
 
@@ -1125,15 +1132,33 @@ function closeBlockerDialog() {
 
 function getDryRunBlockers(dryRunPayload) {
   const blockers = [];
-
-  if (Array.isArray(dryRunPayload?.errors)) {
-    blockers.push(...dryRunPayload.errors);
-  }
+  const readinessIssueKeys = new Set();
 
   const globalBlocked = (dryRunPayload?.readiness || []).filter((entry) => !entry.canPublish);
   for (const entry of globalBlocked) {
     const firstIssue = entry.hardMissing?.[0] || 'Missing required fields';
+    const key = `${String(entry.title || '').trim()}::${String(firstIssue).trim()}`;
+    readinessIssueKeys.add(key);
     blockers.push(`Published post "${entry.title}": ${firstIssue}`);
+  }
+
+  if (Array.isArray(dryRunPayload?.errors)) {
+    for (const rawError of dryRunPayload.errors) {
+      const text = String(rawError || '').trim();
+      if (!text) continue;
+
+      const delimiterIndex = text.indexOf(':');
+      if (delimiterIndex > 0) {
+        const title = text.slice(0, delimiterIndex).trim();
+        const issue = text.slice(delimiterIndex + 1).trim();
+        const key = `${title}::${issue}`;
+        if (readinessIssueKeys.has(key)) {
+          continue;
+        }
+      }
+
+      blockers.push(text);
+    }
   }
 
   return [...new Set(blockers)];
@@ -1167,9 +1192,9 @@ async function setProjectStatusOnly(projectId, nextStatus) {
 
   markLiveChangesPending();
   if (nextStatus === 'published') {
-    setFeedback('success', 'Marked as published. Click "Republish Site" to deploy all pending changes.');
+    setFeedback('success', 'Marked as published. Click "Sync Site" to deploy all pending changes.');
   } else {
-    setFeedback('success', 'Moved to draft. Click "Republish Site" to update the live site.');
+    setFeedback('success', 'Moved to draft. Click "Sync Site" to update the live site.');
   }
 
   await loadProjects(projectId);
@@ -1188,7 +1213,7 @@ async function unpublishPost(projectId) {
   }
 
   const confirmed = window.confirm(
-    `Move "${project.title || 'Untitled post'}" back to draft? This change will go live after you click "Republish Site".`
+    `Move "${project.title || 'Untitled post'}" back to draft? This change will go live after you click "Sync Site".`
   );
   if (!confirmed) return;
 
@@ -1209,17 +1234,13 @@ async function togglePublishPost(projectId) {
 
 async function republishSite() {
   const confirmed = window.confirm(
-    'Republish site now? This will trigger a new deployment and publish all pending new or updated posts and ordering changes.'
+    'Sync site now? This will trigger a new deployment and publish all pending new or updated posts and ordering changes.'
   );
   if (!confirmed) return;
 
   if (els.republishSiteBtn) {
     els.republishSiteBtn.disabled = true;
-    els.republishSiteBtn.textContent = 'Republishing...';
-  }
-  if (els.mobileRepublishBtn) {
-    els.mobileRepublishBtn.disabled = true;
-    els.mobileRepublishBtn.textContent = 'Republishing...';
+    els.republishSiteBtn.textContent = 'Syncing...';
   }
 
   try {
@@ -1235,7 +1256,7 @@ async function republishSite() {
 
     const blockers = getDryRunBlockers(dryRun);
     if (blockers.length > 0) {
-      openBlockerDialog(blockers, 'Republish is blocked until these issues are fixed.');
+      openBlockerDialog(blockers, 'Sync is blocked until these issues are fixed.');
       return;
     }
 
@@ -1249,15 +1270,12 @@ async function republishSite() {
       : '';
 
     clearLiveChangesPending();
-    setFeedback('success', `Republished. Snapshot: ${publishPayload.snapshotKey}.${warningText}`);
+    setFeedback('success', `Site synced. Snapshot: ${publishPayload.snapshotKey}.${warningText}`);
 
     await loadProjects(state.editorState.activeId);
   } finally {
     if (els.republishSiteBtn) {
-      els.republishSiteBtn.textContent = 'Republish Site';
-    }
-    if (els.mobileRepublishBtn) {
-      els.mobileRepublishBtn.textContent = 'Republish';
+      els.republishSiteBtn.textContent = 'Sync Site';
     }
     renderLivePendingState();
   }
@@ -1772,7 +1790,7 @@ async function reorderAssetByDrop(assetId, targetIndex) {
   }
 }
 
-function resolveAssetDropTargetIndex(overItem, pointerY) {
+function resolveAssetDropTargetIndex(overItem, pointerX) {
   const ordered = getSortedAssets(state.editorState.activeProject?.assets || []);
   const sourceIndex = ordered.findIndex((asset) => asset.id === state.mediaState.dragAssetId);
   if (sourceIndex === -1) return { ordered, targetIndex: -1 };
@@ -1786,7 +1804,7 @@ function resolveAssetDropTargetIndex(overItem, pointerY) {
   if (overIndex === -1) return { ordered, targetIndex: -1 };
 
   const rect = overItem.getBoundingClientRect();
-  const isAfter = pointerY >= rect.top + rect.height / 2;
+  const isAfter = pointerX >= rect.left + rect.width / 2;
   let targetIndex = overIndex + (isAfter ? 1 : 0);
 
   if (sourceIndex < targetIndex && overItem) {
@@ -1813,11 +1831,37 @@ function renderAssetEditors(assets) {
     state.mediaState.selectedAssetId &&
     sortedAssets.some((asset) => asset.id === state.mediaState.selectedAssetId);
 
-  state.mediaState.selectedAssetId = hasSelected ? state.mediaState.selectedAssetId : sortedAssets[0].id;
+  state.mediaState.selectedAssetId = hasSelected ? state.mediaState.selectedAssetId : null;
 
   const selectedAsset = sortedAssets.find((asset) => asset.id === state.mediaState.selectedAssetId);
   if (!selectedAsset) {
-    els.assetList.innerHTML = '<p class="notice">Select an asset to edit metadata.</p>';
+    const leadAssetId = sortedAssets[0]?.id || null;
+    els.assetList.innerHTML = `
+      <div class="admin-v2-asset-browser">
+        <ul class="admin-v2-asset-sort-list" aria-label="Asset order">
+          ${sortedAssets
+            .map((asset) => {
+              const isCover = asset.id === leadAssetId;
+              return `
+                <li class="admin-v2-asset-sort-item" data-asset-id="${escapeHtml(asset.id)}" draggable="true">
+                  <button type="button" class="admin-v2-asset-sort-btn" data-asset-select="${escapeHtml(asset.id)}">
+                    <span class="admin-v2-asset-thumb">${getAssetThumbMarkup(asset, sortedAssets)}</span>
+                    <span class="admin-v2-asset-sort-meta">
+                      <span class="admin-v2-asset-sort-head">
+                        <strong>${escapeHtml(asset.kind.toUpperCase())}</strong>
+                        ${isCover ? '<span class="admin-v2-cover-chip">Cover</span>' : ''}
+                      </span>
+                      <span>${escapeHtml(asset.caption || asset.r2Key)}</span>
+                    </span>
+                  </button>
+                </li>
+              `;
+            })
+            .join('')}
+        </ul>
+        <p class="notice">Click an asset to edit metadata.</p>
+      </div>
+    `;
     return;
   }
 
@@ -1841,9 +1885,8 @@ function renderAssetEditors(assets) {
                       <strong>${escapeHtml(asset.kind.toUpperCase())}</strong>
                       ${isCover ? '<span class="admin-v2-cover-chip">Cover</span>' : ''}
                     </span>
-                    <span>${escapeHtml(asset.r2Key)}</span>
+                    <span>${escapeHtml(asset.caption || 'Untitled asset')}</span>
                   </span>
-                  <span class="admin-v2-drag-handle" aria-hidden="true">::</span>
                 </button>
               </li>
             `;
@@ -1855,9 +1898,17 @@ function renderAssetEditors(assets) {
         <div class="asset-editor-preview">${assetPreviewMarkup(selectedAsset, sortedAssets)}</div>
         <div class="asset-editor-content">
           <h4>
-            ${escapeHtml(selectedAsset.kind.toUpperCase())} • ${escapeHtml(selectedAsset.r2Key)}
+            ${escapeHtml(selectedAsset.kind.toUpperCase())}
             ${selectedIsCover ? '<span class="admin-v2-cover-chip">Cover</span>' : ''}
           </h4>
+
+          <label>Title
+            <input type="text" name="caption" value="${escapeHtml(resolved.caption || '')}" />
+          </label>
+
+          <label>Alt Text
+            <input type="text" name="altText" value="${escapeHtml(resolved.altText || '')}" />
+          </label>
 
           <div class="form-grid admin-v2-asset-grid">
             <label>Kind
@@ -1868,14 +1919,6 @@ function renderAssetEditors(assets) {
               </select>
             </label>
           </div>
-
-          <label>Alt Text
-            <input type="text" name="altText" value="${escapeHtml(resolved.altText || '')}" />
-          </label>
-
-          <label>Caption
-            <textarea name="caption">${escapeHtml(resolved.caption || '')}</textarea>
-          </label>
 
           <div class="admin-actions">
             <a class="btn ghost" href="${escapeHtml(selectedAsset.url)}" target="_blank" rel="noopener noreferrer">Open File</a>
@@ -2064,7 +2107,7 @@ function buildProjectPreviewMarkup(project) {
         <h1 class="brand"><a href="/" style="text-decoration:none;">Raymondo</a></h1>
         <nav class="site-nav">
           <a href="/">Back to Work</a>
-          <a href="mailto:hello@raymondo.design">Contact</a>
+          <a href="mailto:raymondartguy@gmail.com">Contact</a>
         </nav>
       </header>
 
@@ -2434,7 +2477,7 @@ function wireAssetEvents() {
       .forEach((node) => node.classList.remove('is-drop-before', 'is-drop-after'));
 
     const rect = overItem.getBoundingClientRect();
-    const isAfter = event.clientY >= rect.top + rect.height / 2;
+    const isAfter = event.clientX >= rect.left + rect.width / 2;
     overItem.classList.add(isAfter ? 'is-drop-after' : 'is-drop-before');
   });
 
@@ -2444,7 +2487,7 @@ function wireAssetEvents() {
 
     const draggedId = state.mediaState.dragAssetId;
     const overItem = event.target.closest('.admin-v2-asset-sort-item');
-    const { ordered, targetIndex } = resolveAssetDropTargetIndex(overItem, event.clientY);
+    const { ordered, targetIndex } = resolveAssetDropTargetIndex(overItem, event.clientX);
     const sourceIndex = ordered.findIndex((asset) => asset.id === draggedId);
 
     clearAssetDragState();
@@ -2692,12 +2735,6 @@ function wireEvents() {
     els.mobilePreviewBtn.addEventListener('click', () => renderDraftPreview());
   }
 
-  if (els.mobileRepublishBtn) {
-    els.mobileRepublishBtn.addEventListener('click', () => {
-      republishSite().catch((error) => setFeedback('error', error.message));
-    });
-  }
-
   if (els.mobilePublishBtn) {
     els.mobilePublishBtn.addEventListener('click', () => {
       if (!state.editorState.activeId) return;
@@ -2724,6 +2761,7 @@ async function init() {
     setMobileTab('posts');
     clearEditor();
     await loadProjects();
+    await refreshPendingLiveChangesFromServer();
   } catch (error) {
     setFeedback('error', error.message);
   }

@@ -1395,11 +1395,11 @@ textarea {
 }
 
 .admin-v2-asset-sort-item.is-drop-before {
-  box-shadow: inset 0 3px 0 rgba(31, 93, 122, 0.46);
+  box-shadow: inset 3px 0 0 rgba(31, 93, 122, 0.46);
 }
 
 .admin-v2-asset-sort-item.is-drop-after {
-  box-shadow: inset 0 -3px 0 rgba(31, 93, 122, 0.46);
+  box-shadow: inset -3px 0 0 rgba(31, 93, 122, 0.46);
 }
 
 .admin-v2-asset-sort-btn {
@@ -1464,12 +1464,6 @@ textarea {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
-}
-
-.admin-v2-asset-sort-btn .admin-v2-drag-handle {
-  position: absolute;
-  right: 0.45rem;
-  bottom: 0.45rem;
 }
 
 .admin-v2-cover-chip {
@@ -1765,6 +1759,41 @@ textarea {
   gap: 0.55rem;
 }
 
+.admin-v3-new-post-inline {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid rgba(17, 73, 96, 0.55);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #eaf4f8 0%, #d7ebf3 100%);
+  color: #1f5d7a;
+  cursor: pointer;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.35) inset, 0 2px 8px rgba(31, 93, 122, 0.14);
+  transition: transform 140ms ease, box-shadow 140ms ease, filter 140ms ease;
+}
+
+.admin-v3-new-post-inline:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.02);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.4) inset, 0 4px 12px rgba(31, 93, 122, 0.2);
+}
+
+.admin-v3-new-post-inline:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+.admin-v3-new-post-inline:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(31, 93, 122, 0.24), 0 1px 0 rgba(255, 255, 255, 0.35) inset;
+}
+
 .admin-v3-search-label {
   gap: 0.36rem;
 }
@@ -2045,7 +2074,7 @@ textarea {
 
 .admin-v3-toolbar .admin-actions button,
 .admin-v3-mobile-actions button,
-.admin-v3-sidebar button,
+.admin-v3-sidebar button:not(.admin-v3-new-post-inline),
 .admin-v3-shell input,
 .admin-v3-shell select,
 .admin-v3-shell textarea {
@@ -2254,7 +2283,7 @@ textarea {
     z-index: 16;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     gap: 0.45rem;
