@@ -6,8 +6,8 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
 ---
 
 <SiteLayout title="Raymondo Admin" description="Admin dashboard for Raymondo portfolio content.">
-  <main class="admin-shell admin-editor-shell admin-v2-shell">
-    <header class="site-header">
+  <main class="admin-shell admin-v3-shell" id="adminV3Root" data-mobile-tab="posts">
+    <header class="site-header admin-v3-header">
       <h1 class="brand">Raymondo Admin</h1>
       <nav class="site-nav">
         <a href="/">View Site</a>
@@ -15,74 +15,119 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
       </nav>
     </header>
 
-    <p class="notice" style="margin-top:0.8rem;">
-      Manage posts here.
-    </p>
+    <p class="notice admin-v3-intro">Manage posts with a simple draft-to-publish workflow.</p>
 
-    <div class="admin-workspace admin-v2-workspace">
-      <aside class="admin-panel admin-projects-panel admin-v2-projects">
-        <h2>Projects</h2>
+    <nav class="admin-v3-mobile-nav" id="mobileTabBar" aria-label="Admin sections">
+      <button type="button" class="filter-chip" data-mobile-tab="posts" aria-pressed="true">Posts</button>
+      <button type="button" class="filter-chip" data-mobile-tab="edit" aria-pressed="false">Edit</button>
+      <button type="button" class="filter-chip" data-mobile-tab="media" aria-pressed="false">Media</button>
+    </nav>
 
-        <div class="admin-actions" style="margin-bottom:0.8rem;">
-          <button type="button" id="newGraphicBtn">New Graphic</button>
-          <button type="button" id="new3dBtn" class="btn secondary">New 3D</button>
-          <button type="button" id="bulkPublishBtn" class="btn secondary" disabled>Publish Selected (0)</button>
+    <div class="admin-v3-layout">
+      <aside class="admin-panel admin-v3-sidebar" id="postsPane">
+        <div class="admin-v3-sidebar-top">
+          <button type="button" id="newPostBtn">New Post</button>
+          <button type="button" id="reorderToggleBtn" class="btn secondary" aria-pressed="false">Reorder</button>
         </div>
 
-        <label class="admin-v2-search-label">
-          Search
-          <input id="projectSearch" type="search" placeholder="Search title or slug" />
+        <label class="admin-v3-search-label">
+          Search Posts
+          <input id="postSearchInput" type="search" placeholder="Search title or slug" />
         </label>
 
-        <div class="admin-v2-filter-row" id="projectFilterBar" role="group" aria-label="Project filters">
-          <button type="button" class="filter-chip" data-filter="all" aria-pressed="true">All</button>
-          <button type="button" class="filter-chip" data-filter="draft" aria-pressed="false">Draft</button>
-          <button type="button" class="filter-chip" data-filter="ready" aria-pressed="false">Ready</button>
-          <button type="button" class="filter-chip" data-filter="blocked" aria-pressed="false">Blocked</button>
-          <button type="button" class="filter-chip" data-filter="published" aria-pressed="false">Published</button>
+        <div class="filter-bar admin-v3-scope-bar" id="postScopeBar" role="group" aria-label="Post scope">
+          <button type="button" class="filter-chip" data-scope="all" aria-pressed="true">
+            All <span class="admin-v3-scope-count">0</span>
+          </button>
+          <button type="button" class="filter-chip" data-scope="draft" aria-pressed="false">
+            Drafts <span class="admin-v3-scope-count">0</span>
+          </button>
+          <button type="button" class="filter-chip" data-scope="published" aria-pressed="false">
+            Published <span class="admin-v3-scope-count">0</span>
+          </button>
         </div>
 
-        <ul class="project-list admin-v2-project-list" id="projectList"></ul>
+        <section class="admin-v3-post-group">
+          <div class="admin-v3-group-head">
+            <h2>Drafts</h2>
+            <span id="draftsCount">0</span>
+          </div>
+          <ul id="draftPostList" class="admin-v3-post-list"></ul>
+        </section>
+
+        <section class="admin-v3-post-group">
+          <div class="admin-v3-group-head">
+            <h2>Published</h2>
+            <span id="publishedCount">0</span>
+          </div>
+          <ul id="publishedPostList" class="admin-v3-post-list"></ul>
+        </section>
       </aside>
 
-      <section class="admin-editor-region admin-v2-editor">
-        <div id="feedback"></div>
+      <section class="admin-v3-editor" id="editorPane">
+        <div id="feedback" class="admin-v3-toast-region" aria-live="polite"></div>
 
         <form class="admin-inline-form" id="projectForm" novalidate>
-          <section class="admin-panel admin-v2-toolbar" id="adminTopBar">
-            <div class="admin-v2-toolbar-meta">
-              <p class="admin-v2-project-label" id="activeProjectLabel">No project selected</p>
-              <div class="admin-v2-toolbar-badges">
+          <section class="admin-panel admin-v3-toolbar" id="editorTopBar">
+            <div class="admin-v3-toolbar-meta">
+              <p class="admin-v3-project-label" id="activeProjectLabel">No post selected</p>
+              <div class="admin-v3-toolbar-badges">
                 <span id="projectStatusBadge" class="status-pill draft">draft</span>
-                <span id="saveStateChip" class="admin-v2-save-chip saved">Saved</span>
+                <span id="saveStateChip" class="admin-v3-save-chip saved">All changes saved</span>
+                <span id="livePendingChip" class="admin-v3-live-chip clean">Live is up to date</span>
               </div>
             </div>
             <div class="admin-actions">
-              <button type="button" class="btn secondary" id="saveNowBtn">Save Now</button>
+              <button type="button" class="btn secondary" id="saveNowBtn">Save</button>
               <button type="button" class="btn secondary" id="previewBtn">Preview</button>
-              <button type="button" id="publishBtn">Publish Snapshot</button>
-              <button type="button" class="btn ghost" id="unpublishBtn">Unpublish</button>
+              <button type="button" class="btn secondary" id="republishSiteBtn" disabled>Republish Site</button>
+              <button type="button" id="publishToggleBtn">Publish</button>
               <button type="button" class="btn danger" id="deleteBtn">Delete Draft</button>
             </div>
           </section>
 
-          <section class="admin-panel">
-            <h2>Content</h2>
-            <p class="notice">Core fields for drafting and publish readiness.</p>
+          <section class="admin-panel admin-v3-edit-panel" data-mobile-view="edit">
+            <h2>Essentials</h2>
+            <p class="notice">These are the only fields needed for a clean draft.</p>
 
-            <div class="form-grid" style="margin-top:0.8rem;">
-              <label class="admin-v2-project-id">Project ID
-                <input class="admin-v2-project-id-input" type="text" name="id" readonly />
+            <div class="form-grid admin-v3-essentials-grid" style="margin-top:0.8rem;">
+              <label class="admin-v3-project-id">Project ID
+                <input class="admin-v3-project-id-input" type="text" name="id" readonly />
               </label>
+
+              <label>Title
+                <input type="text" name="title" placeholder="Project title" required />
+              </label>
+
               <label>Slug
                 <input type="text" name="slug" placeholder="moro-studio-identity" required />
               </label>
-                <label>Discipline
+
+              <label>Discipline
                 <select name="discipline" class="admin-v2-select-input">
                   <option value="graphic">Graphic</option>
                   <option value="3d">3D</option>
                 </select>
               </label>
+
+              <label>Year
+                <select name="year" class="admin-v2-select-input">
+                  {yearOptions.map((year) => (
+                    <option value={year} selected={year === currentYear}>{year}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <label style="margin-top:0.7rem;">Short Description
+              <textarea class="inline-textarea" name="descriptionShort" placeholder="One-line summary for cards and SEO"></textarea>
+            </label>
+          </section>
+
+          <details class="admin-v2-advanced admin-v3-advanced-panel" data-mobile-view="edit">
+            <summary>More options</summary>
+
+            <div class="form-grid admin-v3-options-grid" style="margin-top:0.7rem;">
               <label>Style Template
                 <select name="styleTemplate" class="admin-v2-select-input">
                   <option value="editorial">Editorial</option>
@@ -90,70 +135,68 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
                   <option value="minimal-grid">Minimal Grid</option>
                 </select>
               </label>
+
+              <label class="admin-v3-chip-field">Tags
+                <input type="hidden" name="tags" id="tagsField" />
+                <div class="admin-v3-chip-input-row">
+                  <input id="tagEditorInput" type="text" placeholder="Type one or comma-separated tags" />
+                  <button type="button" class="btn secondary" id="tagAddBtn">Add</button>
+                </div>
+                <div id="tagChipList" class="admin-v3-chip-list" aria-live="polite"></div>
+              </label>
+
+              <label class="admin-v3-chip-field">Palette
+                <input type="hidden" name="palette" id="paletteField" />
+                <div class="admin-v3-chip-input-row">
+                  <input id="paletteTextInput" type="text" placeholder="#111111,#d65c3b,#f5f0e5" />
+                  <button type="button" class="btn secondary" id="paletteApplyBtn">Apply</button>
+                </div>
+                <div class="admin-v3-chip-input-row">
+                  <input id="paletteColorPicker" type="color" value="#111111" />
+                  <button type="button" class="btn secondary" id="paletteAddColorBtn">Add Color</button>
+                </div>
+                <div id="paletteChipList" class="admin-v3-chip-list" aria-live="polite"></div>
+              </label>
             </div>
 
-            <label style="margin-top:0.8rem;">Project Title
-              <input class="inline-input" type="text" name="title" placeholder="Project title" />
-            </label>
+            <div class="palette" id="palettePreview" style="margin-top:0.55rem;"></div>
 
-            <label style="margin-top:0.6rem;">Short Description
-              <textarea class="inline-textarea" name="descriptionShort" placeholder="One-line summary for cards and SEO"></textarea>
-            </label>
-
-            <label style="margin-top:0.6rem;">Long Description
+            <label style="margin-top:0.7rem;">Long Description
               <textarea class="inline-textarea" name="descriptionLong" placeholder="Project narrative for the public page"></textarea>
             </label>
 
-            <details class="admin-v2-advanced" open>
-              <summary>Advanced: Taxonomy</summary>
-              <div class="form-grid">
-                <label>Year
-                  <select name="year" class="admin-v2-select-input">
-                    {yearOptions.map((year) => (
-                      <option value={year} selected={year === currentYear}>{year}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>Tags (comma-separated)
-                  <input type="text" name="tags" placeholder="Branding,Editorial,3D" />
-                </label>
-                <label>Palette (comma-separated)
-                  <input type="text" name="palette" placeholder="#111111,#d65c3b,#f5f0e5" />
-                </label>
-              </div>
-              <div class="palette" id="palettePreview" style="margin-top:0.55rem;"></div>
-            </details>
+            <div class="form-grid admin-v2-notes-grid" style="margin-top:0.7rem;">
+              <label>Inspiration and Theme
+                <textarea class="inline-textarea" name="themeInspiration" placeholder="Theme inspiration notes"></textarea>
+              </label>
 
-            <details class="admin-v2-advanced">
-              <summary>Advanced: Story and Process Notes</summary>
-              <div class="form-grid admin-v2-notes-grid">
-                <label>Inspiration and Theme
-                  <textarea class="inline-textarea" name="themeInspiration" placeholder="Theme inspiration notes"></textarea>
-                </label>
-                <label>Design DNA
-                  <textarea class="inline-textarea" name="styleDirection" placeholder="Visual direction, references, and tone"></textarea>
-                </label>
-                <label>Typography Notes
-                  <textarea class="inline-textarea" name="typographyNotes" placeholder="Type choices and rationale"></textarea>
-                </label>
-                <label>Motif Summary
-                  <textarea class="inline-textarea" name="motifSummary" placeholder="Key motifs and recurring visual elements"></textarea>
-                </label>
-                <label class="three-d-only">Tooling Notes
-                  <textarea class="inline-textarea" name="toolingNotes" placeholder="3D tools, workflow, render pipeline"></textarea>
-                </label>
-                <label class="three-d-only">Material Notes
-                  <textarea class="inline-textarea" name="materialNotes" placeholder="Materials, textures, and lighting notes"></textarea>
-                </label>
-              </div>
-            </details>
-          </section>
+              <label>Design DNA
+                <textarea class="inline-textarea" name="styleDirection" placeholder="Visual direction, references, and tone"></textarea>
+              </label>
 
-          <section class="admin-assets-section admin-v2-assets" id="assetsSection">
-            <h2 class="admin-subheading">Assets</h2>
-            <p class="notice">Drop files to auto-attach with smart defaults. First usable visual becomes the cover if missing.</p>
+              <label>Typography Notes
+                <textarea class="inline-textarea" name="typographyNotes" placeholder="Type choices and rationale"></textarea>
+              </label>
 
-            <div id="dropzone" class="dropzone" style="margin-top:0.8rem;">
+              <label>Motif Summary
+                <textarea class="inline-textarea" name="motifSummary" placeholder="Key motifs and recurring visual elements"></textarea>
+              </label>
+
+              <label class="three-d-only">Tooling Notes
+                <textarea class="inline-textarea" name="toolingNotes" placeholder="3D tools, workflow, render pipeline"></textarea>
+              </label>
+
+              <label class="three-d-only">Material Notes
+                <textarea class="inline-textarea" name="materialNotes" placeholder="Materials, textures, and lighting notes"></textarea>
+              </label>
+            </div>
+          </details>
+
+          <section class="admin-assets-section admin-v3-media-panel" id="assetsSection" data-mobile-view="media">
+            <h2 class="admin-subheading">Media</h2>
+            <p class="notice">Upload files, edit alt text, and arrange order. First item is cover by default.</p>
+
+            <div id="dropzone" class="dropzone admin-v3-dropzone" style="margin-top:0.8rem;">
               Drag and drop files here or
               <label style="display:inline;cursor:pointer;text-decoration:underline;">
                 browse
@@ -163,58 +206,29 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
 
             <p class="notice" id="uploadStatus" style="margin-top:0.6rem;"></p>
 
-            <h3 class="admin-v2-asset-title">Manage Uploaded Assets</h3>
+            <h3 class="admin-v2-asset-title">Assets</h3>
             <div id="assetList" class="asset-editor-grid admin-v2-asset-list"></div>
-          </section>
-
-          <section class="admin-panel admin-v2-publish" id="publishPanel">
-            <h2>Publish</h2>
-            <p class="notice">Checklist below uses current server-side readiness rules.</p>
-
-            <div class="admin-v2-readiness-grid">
-              <article class="admin-v2-readiness-card" id="contentSection">
-                <h3>Hard Requirements</h3>
-                <ul id="hardMissingList" class="admin-v2-checklist"></ul>
-              </article>
-              <article class="admin-v2-readiness-card">
-                <h3>Quality Warnings</h3>
-                <ul id="softMissingList" class="admin-v2-checklist"></ul>
-              </article>
-            </div>
-
-            <p id="preflightSummary" class="notice" style="margin-top:0.5rem;"></p>
           </section>
         </form>
 
-        <div class="admin-v2-mobile-bar">
+        <div class="admin-v3-mobile-actions">
           <button type="button" class="btn secondary" id="mobileSaveBtn">Save</button>
           <button type="button" class="btn secondary" id="mobilePreviewBtn">Preview</button>
+          <button type="button" class="btn secondary" id="mobileRepublishBtn" disabled>Republish</button>
           <button type="button" id="mobilePublishBtn">Publish</button>
-          <button type="button" class="btn ghost" id="mobileAssetsBtn">Add Assets</button>
+          <button type="button" class="btn danger" id="mobileDeleteBtn">Delete</button>
         </div>
       </section>
     </div>
   </main>
 
-  <dialog id="preflightDialog" class="admin-v2-dialog">
+  <dialog id="blockerDialog" class="admin-v2-dialog">
     <article class="admin-v2-dialog-card">
-      <h2>Publish Preflight</h2>
-      <p class="notice" id="preflightDialogIntro">Checking requirements...</p>
-
-      <div class="admin-v2-readiness-grid">
-        <article class="admin-v2-readiness-card">
-          <h3>Current Project Blockers</h3>
-          <ul id="modalHardList" class="admin-v2-checklist"></ul>
-        </article>
-        <article class="admin-v2-readiness-card">
-          <h3>Published Project Blockers</h3>
-          <ul id="modalGlobalList" class="admin-v2-checklist"></ul>
-        </article>
-      </div>
-
+      <h2>Publish Blocked</h2>
+      <p class="notice" id="blockerIntro">Fix these issues before publishing.</p>
+      <ul id="blockerList" class="admin-v2-checklist" style="margin-top:0.7rem;"></ul>
       <div class="admin-actions" style="margin-top:1rem;justify-content:flex-end;">
-        <button type="button" class="btn secondary" id="preflightCancelBtn">Cancel</button>
-        <button type="button" id="preflightConfirmBtn">Publish Now</button>
+        <button type="button" class="btn secondary" id="blockerCloseBtn">Close</button>
       </div>
     </article>
   </dialog>

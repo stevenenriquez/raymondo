@@ -8,6 +8,12 @@ import {
   parseArray
 } from '../../../lib/validators';
 
+function resolveCoverAsset(project) {
+  if (!project || !Array.isArray(project.assets) || project.assets.length === 0) return null;
+  const byId = project.coverAssetId ? project.assets.find((asset) => asset.id === project.coverAssetId) : null;
+  return byId || project.assets.find((asset) => asset.featured) || project.assets[0] || null;
+}
+
 function validateProjectInput(body) {
   if (!ALLOWED_DISCIPLINES.has(body.discipline || 'graphic')) {
     return 'discipline must be graphic or 3d.';
@@ -68,12 +74,18 @@ export async function onRequestGet(context) {
   const projectsWithReadiness = await Promise.all(
     projects.map(async (project) => {
       const detailed = await getProjectById(context.env.PORTFOLIO_DB, project.id, context.env.ASSET_PUBLIC_BASE_URL);
+      const coverAsset = resolveCoverAsset(detailed);
       const readiness = detailed
         ? computeProjectReadiness(detailed)
         : { canPublish: false, hardMissing: ['Project data unavailable.'], softMissing: [], discipline: project.discipline };
 
       return {
         ...project,
+        descriptionShort: detailed?.descriptionShort || '',
+        tags: detailed?.tags || [],
+        coverAssetId: detailed?.coverAssetId || null,
+        coverUrl: coverAsset?.url || '',
+        coverAltText: coverAsset?.altText || '',
         readiness
       };
     })

@@ -48,82 +48,115 @@
  */
 
 const state = {
-  /** @type {AdminProject[]} */
-  projects: [],
-  activeId: null,
-  /** @type {AdminProject|null} */
-  activeProject: null,
-  projectFilter: 'all',
-  projectSearch: '',
-  saveState: 'saved',
-  saveStateText: 'Saved',
-  isSaving: false,
-  autosaveTimer: null,
-  queuedSave: null,
-  isPopulating: false,
-  hasDirtyChanges: false,
-  lastSavedFingerprint: '',
-  dragProjectId: null,
-  selectedProjectIds: new Set(),
-  selectedAssetId: null,
-  dragAssetId: null,
-  /** @type {Map<string, object>} */
-  assetDrafts: new Map(),
-  uploadQueue: [],
-  lastPreflight: null
+  postsState: {
+    /** @type {AdminProject[]} */
+    projects: [],
+    scope: 'all',
+    search: '',
+    reorderMode: false,
+    dragProjectId: null,
+    dragProjectStatus: null
+  },
+  editorState: {
+    activeId: null,
+    /** @type {AdminProject|null} */
+    activeProject: null,
+    isSaving: false,
+    queuedSave: null,
+    isPopulating: false,
+    hasDirtyChanges: false,
+    lastSavedFingerprint: '',
+    saveState: 'saved',
+    autosaveTimer: null
+  },
+  mediaState: {
+    selectedAssetId: null,
+    dragAssetId: null,
+    /** @type {Map<string, object>} */
+    assetDrafts: new Map(),
+    uploadQueue: []
+  },
+  uiState: {
+    mobileTab: 'posts',
+    feedbackTimer: null,
+    pendingLiveChanges: false
+  }
 };
 
 const els = {
-  projectList: document.getElementById('projectList'),
-  projectSearch: document.getElementById('projectSearch'),
-  filterBar: document.getElementById('projectFilterBar'),
-  form: document.getElementById('projectForm'),
+  root: document.getElementById('adminV3Root'),
   feedback: document.getElementById('feedback'),
-  newGraphicBtn: document.getElementById('newGraphicBtn'),
-  new3dBtn: document.getElementById('new3dBtn'),
-  bulkPublishBtn: document.getElementById('bulkPublishBtn'),
-  saveNowBtn: document.getElementById('saveNowBtn'),
-  previewBtn: document.getElementById('previewBtn'),
-  publishBtn: document.getElementById('publishBtn'),
-  unpublishBtn: document.getElementById('unpublishBtn'),
-  deleteBtn: document.getElementById('deleteBtn'),
+  mobileTabBar: document.getElementById('mobileTabBar'),
+  newPostBtn: document.getElementById('newPostBtn'),
+  reorderToggleBtn: document.getElementById('reorderToggleBtn'),
+  postSearchInput: document.getElementById('postSearchInput'),
+  postScopeBar: document.getElementById('postScopeBar'),
+  draftsCount: document.getElementById('draftsCount'),
+  publishedCount: document.getElementById('publishedCount'),
+  draftPostList: document.getElementById('draftPostList'),
+  publishedPostList: document.getElementById('publishedPostList'),
+  form: document.getElementById('projectForm'),
   activeProjectLabel: document.getElementById('activeProjectLabel'),
   projectStatusBadge: document.getElementById('projectStatusBadge'),
   saveStateChip: document.getElementById('saveStateChip'),
+  livePendingChip: document.getElementById('livePendingChip'),
+  saveNowBtn: document.getElementById('saveNowBtn'),
+  previewBtn: document.getElementById('previewBtn'),
+  republishSiteBtn: document.getElementById('republishSiteBtn'),
+  publishToggleBtn: document.getElementById('publishToggleBtn'),
+  deleteBtn: document.getElementById('deleteBtn'),
+  tagsField: document.getElementById('tagsField'),
+  tagEditorInput: document.getElementById('tagEditorInput'),
+  tagAddBtn: document.getElementById('tagAddBtn'),
+  tagChipList: document.getElementById('tagChipList'),
+  paletteField: document.getElementById('paletteField'),
+  paletteTextInput: document.getElementById('paletteTextInput'),
+  paletteApplyBtn: document.getElementById('paletteApplyBtn'),
+  paletteColorPicker: document.getElementById('paletteColorPicker'),
+  paletteAddColorBtn: document.getElementById('paletteAddColorBtn'),
+  paletteChipList: document.getElementById('paletteChipList'),
   palettePreview: document.getElementById('palettePreview'),
-  hardMissingList: document.getElementById('hardMissingList'),
-  softMissingList: document.getElementById('softMissingList'),
-  preflightSummary: document.getElementById('preflightSummary'),
-  preflightDialog: document.getElementById('preflightDialog'),
-  preflightDialogIntro: document.getElementById('preflightDialogIntro'),
-  preflightConfirmBtn: document.getElementById('preflightConfirmBtn'),
-  preflightCancelBtn: document.getElementById('preflightCancelBtn'),
-  modalHardList: document.getElementById('modalHardList'),
-  modalGlobalList: document.getElementById('modalGlobalList'),
-  previewDialog: document.getElementById('previewDialog'),
-  previewDialogIntro: document.getElementById('previewDialogIntro'),
-  previewDialogContent: document.getElementById('previewDialogContent'),
-  previewCloseBtn: document.getElementById('previewCloseBtn'),
-  previewOpenRouteBtn: document.getElementById('previewOpenRouteBtn'),
+  assetsSection: document.getElementById('assetsSection'),
   fileInput: document.getElementById('fileInput'),
   dropzone: document.getElementById('dropzone'),
   uploadStatus: document.getElementById('uploadStatus'),
   assetList: document.getElementById('assetList'),
-  assetsSection: document.getElementById('assetsSection'),
   mobileSaveBtn: document.getElementById('mobileSaveBtn'),
   mobilePreviewBtn: document.getElementById('mobilePreviewBtn'),
+  mobileRepublishBtn: document.getElementById('mobileRepublishBtn'),
   mobilePublishBtn: document.getElementById('mobilePublishBtn'),
-  mobileAssetsBtn: document.getElementById('mobileAssetsBtn')
+  mobileDeleteBtn: document.getElementById('mobileDeleteBtn'),
+  blockerDialog: document.getElementById('blockerDialog'),
+  blockerIntro: document.getElementById('blockerIntro'),
+  blockerList: document.getElementById('blockerList'),
+  blockerCloseBtn: document.getElementById('blockerCloseBtn'),
+  previewDialog: document.getElementById('previewDialog'),
+  previewDialogIntro: document.getElementById('previewDialogIntro'),
+  previewDialogContent: document.getElementById('previewDialogContent'),
+  previewCloseBtn: document.getElementById('previewCloseBtn'),
+  previewOpenRouteBtn: document.getElementById('previewOpenRouteBtn')
 };
 
 const MODEL_FILE_EXTENSIONS = ['.glb', '.gltf'];
 const CURRENT_YEAR = new Date().getFullYear();
 
-function setFeedback(type, text) {
+function setFeedback(type, text, options = {}) {
+  const { timeout = type === 'error' ? 7000 : 3500 } = options;
+  if (!els.feedback) return;
+
+  clearTimeout(state.uiState.feedbackTimer);
   els.feedback.innerHTML = `<p class="feedback ${type}">${escapeHtml(text)}</p>`;
+
+  if (timeout > 0) {
+    state.uiState.feedbackTimer = setTimeout(() => {
+      clearFeedback();
+    }, timeout);
+  }
 }
 
 function clearFeedback() {
+  if (!els.feedback) return;
+  clearTimeout(state.uiState.feedbackTimer);
   els.feedback.innerHTML = '';
 }
 
@@ -163,7 +196,7 @@ async function api(path, options = {}) {
 
     if (text.trim().startsWith('<')) {
       throw new Error(
-        `Expected JSON from ${path}, but received HTML (status ${response.status}). If running locally, start with "npm run dev:cloudflare" instead of Astro-only dev.`
+        `Expected JSON from ${path}, but received HTML (status ${response.status}). If running locally, start with "npm run dev:cloudflare".`
       );
     }
 
@@ -199,6 +232,23 @@ function normalizeSpaces(value) {
   return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
+function uniqueTokens(tokens, options = {}) {
+  const { caseInsensitive = false } = options;
+  const seen = new Set();
+  const out = [];
+
+  for (const token of tokens) {
+    const normalized = String(token || '').trim();
+    if (!normalized) continue;
+    const key = caseInsensitive ? normalized.toLowerCase() : normalized;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+
+  return out;
+}
+
 function parseOptionalNumber(value) {
   const trimmed = String(value || '').trim();
   if (!trimmed) return null;
@@ -213,7 +263,7 @@ function resolveYearValue(value) {
 }
 
 function field(name) {
-  return els.form.elements.namedItem(name);
+  return els.form?.elements.namedItem(name);
 }
 
 function readField(name) {
@@ -241,32 +291,70 @@ function getStatusClass(status) {
 }
 
 function setSaveState(nextState, textOverride) {
-  state.saveState = nextState;
+  state.editorState.saveState = nextState;
 
   const copy =
     textOverride ||
     {
-      saved: 'Saved',
-      saving: 'Saving...',
+      saved: 'All changes saved',
+      saving: 'Saving changes...',
       unsaved: 'Unsaved changes',
-      error: 'Save failed'
-    }[nextState] || 'Saved';
+      error: 'Needs attention'
+    }[nextState] || 'All changes saved';
 
-  state.saveStateText = copy;
-  els.saveStateChip.textContent = copy;
-  els.saveStateChip.classList.remove('saved', 'saving', 'unsaved', 'error');
-  els.saveStateChip.classList.add(nextState);
+  if (els.saveStateChip) {
+    els.saveStateChip.textContent = copy;
+    els.saveStateChip.classList.remove('saved', 'saving', 'unsaved', 'error');
+    els.saveStateChip.classList.add(nextState);
+  }
 }
 
-function projectPayloadFromForm(statusOverride) {
+function renderLivePendingState() {
+  const pending = state.uiState.pendingLiveChanges;
+
+  if (els.livePendingChip) {
+    els.livePendingChip.textContent = pending ? 'Live changes pending republish' : 'Live is up to date';
+    els.livePendingChip.classList.remove('pending', 'clean');
+    els.livePendingChip.classList.add(pending ? 'pending' : 'clean');
+  }
+
+  if (els.republishSiteBtn) {
+    els.republishSiteBtn.disabled = !pending;
+  }
+
+  if (els.mobileRepublishBtn) {
+    els.mobileRepublishBtn.disabled = !pending;
+  }
+}
+
+function markLiveChangesPending() {
+  if (!state.uiState.pendingLiveChanges) {
+    state.uiState.pendingLiveChanges = true;
+  }
+  renderLivePendingState();
+}
+
+function clearLiveChangesPending() {
+  if (state.uiState.pendingLiveChanges) {
+    state.uiState.pendingLiveChanges = false;
+  }
+  renderLivePendingState();
+}
+
+function projectPayloadFromForm(statusOverride, sortOrderOverride) {
+  const activeProject = state.editorState.activeProject;
+
   return {
     id: readField('id') || undefined,
     slug: normalizeSpaces(readField('slug')),
     title: normalizeSpaces(readField('title')),
     discipline: readField('discipline') || 'graphic',
-    status: statusOverride || state.activeProject?.status || 'draft',
+    status: statusOverride || activeProject?.status || 'draft',
     year: parseOptionalNumber(readField('year')),
-    sortOrder: Number(state.activeProject?.sortOrder ?? 0),
+    sortOrder:
+      sortOrderOverride === undefined
+        ? Number(activeProject?.sortOrder ?? 0)
+        : Number(sortOrderOverride || 0),
     styleTemplate: readField('styleTemplate') || 'editorial',
     descriptionShort: String(readField('descriptionShort') || '').trim(),
     descriptionLong: String(readField('descriptionLong') || '').trim(),
@@ -281,211 +369,28 @@ function projectPayloadFromForm(statusOverride) {
   };
 }
 
-function getPreviewAssets(project) {
-  return [...(project.assets || [])]
-    .map((asset) => ({
-      ...asset,
-      ...(state.assetDrafts.get(asset.id) || {})
-    }))
-    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
-}
-
-function getPreviewCoverAsset(project) {
-  const byId = project.coverAssetId
-    ? project.assets.find((asset) => asset.id === project.coverAssetId)
-    : null;
-
-  if (byId) return byId;
-  return project.assets.find((asset) => asset.featured) || project.assets[0] || null;
-}
-
-function getDraftPreviewProject() {
-  if (!state.activeProject) return null;
-
-  const payload = projectPayloadFromForm();
-  const assets = getPreviewAssets(state.activeProject);
-
-  return {
-    ...state.activeProject,
-    ...payload,
-    assets
-  };
-}
-
-function previewText(value, fallback) {
-  const text = String(value || '').trim();
-  return text || fallback;
-}
-
-function renderPreviewPalette(colors) {
-  const safeColors = (colors || [])
-    .map((token) => sanitizeSwatchColor(token))
-    .filter(Boolean);
-
-  if (safeColors.length === 0) {
-    return '<p>No palette colors set.</p>';
-  }
-
-  return safeColors
-    .map((color) => `<span class="swatch" style="background:${escapeHtml(color)}" title="${escapeHtml(color)}"></span>`)
-    .join('');
-}
-
-function buildProjectPreviewMarkup(project) {
-  const cover = getPreviewCoverAsset(project);
-  const imageAssets = project.assets.filter((asset) => asset.kind === 'image');
-  const modelAsset = project.assets.find((asset) => asset.kind === 'model3d');
-  const posterAsset = project.assets.find((asset) => asset.kind === 'poster') || cover;
-  const moodboard = imageAssets.filter((asset) => !cover || asset.id !== cover.id);
-  const templateClass = `template-${project.styleTemplate || 'editorial'}`;
-  const tags = (project.tags || [])
-    .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
-    .join('');
-  const yearTag = project.year ? `<span class="tag">${escapeHtml(project.year)}</span>` : '';
-
-  let mediaMarkup = '<div style="height:100%;display:grid;place-items:center;min-height:420px;">No media published yet.</div>';
-
-  if (project.discipline === '3d' && modelAsset) {
-    const posterAttr = posterAsset ? ` poster="${escapeHtml(posterAsset.url)}"` : '';
-    mediaMarkup = `
-      <model-viewer
-        src="${escapeHtml(modelAsset.url)}"
-        ${posterAttr}
-        alt="${escapeHtml(modelAsset.altText || project.title)}"
-        camera-controls
-        auto-rotate
-        shadow-intensity="1"
-        interaction-prompt="auto"
-        style="width:100%;height:100%;min-height:420px;background:#111"
-      ></model-viewer>
-    `;
-  } else if (cover) {
-    mediaMarkup = `<img src="${escapeHtml(cover.url)}" alt="${escapeHtml(cover.altText || project.title)}" />`;
-  }
-
-  const moodboardMarkup =
-    moodboard.length > 0
-      ? `
-      <section>
-        <h2 style="font-family:var(--font-display);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;margin:1.2rem 0 0.7rem;">
-          Moodboard / Supporting Frames
-        </h2>
-        <div class="moodboard">
-          ${moodboard
-            .map(
-              (asset) => `
-            <figure>
-              <img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || `${project.title} supporting visual`)}" loading="lazy" />
-              ${asset.caption ? `<figcaption>${escapeHtml(asset.caption)}</figcaption>` : ''}
-            </figure>
-          `
-            )
-            .join('')}
-        </div>
-      </section>
-    `
-      : '';
-
-  return `
-    <main class="project-shell ${templateClass}">
-      <header class="site-header">
-        <h1 class="brand"><a href="#" style="text-decoration:none;">Raymondo</a></h1>
-        <nav class="site-nav">
-          <a href="#">Back to Work</a>
-          <a href="#">Contact</a>
-        </nav>
-      </header>
-
-      <section class="project-hero">
-        <p class="tag-row">
-          <span class="tag">${project.discipline === '3d' ? '3D Project' : 'Graphic Project'}</span>
-          ${yearTag}
-          ${tags}
-        </p>
-        <h1>${escapeHtml(project.title || 'Untitled Project')}</h1>
-        <p>${escapeHtml(previewText(project.descriptionLong, project.descriptionShort || 'No description yet.'))}</p>
-      </section>
-
-      <section class="project-layout">
-        <article class="project-main">
-          <div class="media-stage">
-            ${mediaMarkup}
-          </div>
-        </article>
-
-        <aside class="project-panel">
-          <div class="panel-block">
-            <h3>Inspiration & Theme</h3>
-            <p>${escapeHtml(previewText(project.themeInspiration, 'Add inspiration details in admin to enrich this section.'))}</p>
-          </div>
-
-          <div class="panel-block">
-            <h3>Design DNA</h3>
-            <p>${escapeHtml(previewText(project.styleDirection, 'No style direction notes yet.'))}</p>
-          </div>
-
-          <div class="panel-block">
-            <h3>Typography Notes</h3>
-            <p>${escapeHtml(previewText(project.typographyNotes, 'No typography notes yet.'))}</p>
-          </div>
-
-          <div class="panel-block">
-            <h3>Motif Summary</h3>
-            <p>${escapeHtml(previewText(project.motifSummary, 'No motif notes yet.'))}</p>
-          </div>
-
-          ${
-            project.discipline === '3d'
-              ? `
-            <div class="panel-block">
-              <h3>Tooling</h3>
-              <p>${escapeHtml(previewText(project.toolingNotes, 'No tooling details yet.'))}</p>
-            </div>
-            <div class="panel-block">
-              <h3>Material Notes</h3>
-              <p>${escapeHtml(previewText(project.materialNotes, 'No material notes yet.'))}</p>
-            </div>
-          `
-              : ''
-          }
-
-          <div class="panel-block">
-            <h3>Palette</h3>
-            <div class="palette">
-              ${renderPreviewPalette(project.palette)}
-            </div>
-          </div>
-        </aside>
-      </section>
-
-      ${moodboardMarkup}
-    </main>
-  `;
-}
-
 function payloadFingerprint(payload) {
   return JSON.stringify(payload);
 }
 
 function markDirty() {
-  if (!state.activeProject || state.isPopulating) return;
-  state.hasDirtyChanges = true;
+  if (!state.editorState.activeProject || state.editorState.isPopulating) return;
+  state.editorState.hasDirtyChanges = true;
   setSaveState('unsaved');
 }
 
 function scheduleAutosave(delay = 800) {
-  if (!state.activeProject || state.isPopulating) return;
-  clearTimeout(state.autosaveTimer);
-  state.autosaveTimer = setTimeout(() => {
-    saveProject({ autosave: true }).catch((error) => {
-      setFeedback('error', error.message);
-    });
+  if (!state.editorState.activeProject || state.editorState.isPopulating) return;
+
+  clearTimeout(state.editorState.autosaveTimer);
+  state.editorState.autosaveTimer = setTimeout(() => {
+    saveProject({ autosave: true }).catch((error) => setFeedback('error', error.message));
   }, delay);
 }
 
 function clearAutosaveTimer() {
-  clearTimeout(state.autosaveTimer);
-  state.autosaveTimer = null;
+  clearTimeout(state.editorState.autosaveTimer);
+  state.editorState.autosaveTimer = null;
 }
 
 function syncThreeDFields() {
@@ -495,7 +400,186 @@ function syncThreeDFields() {
   });
 }
 
+function getTagsFromField() {
+  return uniqueTokens(
+    normalizeCommaList(readField('tags'))
+      .map((token) => normalizeSpaces(token))
+      .filter(Boolean),
+    { caseInsensitive: true }
+  );
+}
+
+function renderTagChipList(tags = getTagsFromField()) {
+  if (!els.tagChipList) return;
+
+  if (!tags.length) {
+    els.tagChipList.innerHTML = '<span class="admin-v3-chip-empty notice">No tags added.</span>';
+    return;
+  }
+
+  els.tagChipList.innerHTML = tags
+    .map(
+      (tag) => `
+        <span class="admin-v3-chip">
+          <span>${escapeHtml(tag)}</span>
+          <button type="button" class="admin-v3-chip-remove" data-remove-tag="${escapeHtml(tag)}" aria-label="Remove tag ${escapeHtml(tag)}">×</button>
+        </span>
+      `
+    )
+    .join('');
+}
+
+function setTagsToField(tags, options = {}) {
+  const { mark = false } = options;
+  const normalized = uniqueTokens(
+    (tags || [])
+      .map((token) => normalizeSpaces(token))
+      .filter(Boolean),
+    { caseInsensitive: true }
+  );
+
+  writeField('tags', normalized.join(','));
+  renderTagChipList(normalized);
+
+  if (mark) {
+    markDirty();
+    scheduleAutosave(250);
+  }
+}
+
+function consumeTagInput(options = {}) {
+  if (!els.tagEditorInput) return;
+  const { replace = false } = options;
+
+  const raw = String(els.tagEditorInput.value || '').trim();
+  if (!raw) return;
+
+  const incoming = uniqueTokens(
+    normalizeCommaList(raw)
+      .map((token) => normalizeSpaces(token))
+      .filter(Boolean),
+    { caseInsensitive: true }
+  );
+
+  if (!incoming.length) return;
+
+  const next = replace ? incoming : [...getTagsFromField(), ...incoming];
+  setTagsToField(next, { mark: true });
+  els.tagEditorInput.value = '';
+}
+
+function getPaletteFromField() {
+  return uniqueTokens(
+    normalizeCommaList(readField('palette'))
+      .map((token) => token.trim())
+      .filter(Boolean)
+  );
+}
+
+function normalizePaletteToken(token) {
+  const next = String(token || '').trim();
+  if (!next) return null;
+  return sanitizeSwatchColor(next) ? next : null;
+}
+
+function renderPaletteChipList(colors = getPaletteFromField()) {
+  if (!els.paletteChipList) return;
+
+  if (!colors.length) {
+    els.paletteChipList.innerHTML = '<span class="admin-v3-chip-empty notice">No colors added.</span>';
+    return;
+  }
+
+  els.paletteChipList.innerHTML = colors
+    .map((color) => {
+      const safeColor = sanitizeSwatchColor(color) || '#000000';
+      return `
+        <span class="admin-v3-chip admin-v3-color-chip">
+          <span class="admin-v3-color-chip-swatch" style="background:${escapeHtml(safeColor)}" aria-hidden="true"></span>
+          <span>${escapeHtml(color)}</span>
+          <button type="button" class="admin-v3-chip-remove" data-remove-color="${escapeHtml(color)}" aria-label="Remove color ${escapeHtml(color)}">×</button>
+        </span>
+      `;
+    })
+    .join('');
+}
+
+function setPaletteToField(colors, options = {}) {
+  const { mark = false, syncTextInput = true } = options;
+  const normalized = uniqueTokens(
+    (colors || [])
+      .map((token) => normalizePaletteToken(token))
+      .filter(Boolean)
+  );
+
+  writeField('palette', normalized.join(','));
+
+  if (syncTextInput && els.paletteTextInput) {
+    els.paletteTextInput.value = normalized.join(',');
+  }
+
+  renderPaletteChipList(normalized);
+  renderPalettePreview();
+
+  if (mark) {
+    markDirty();
+    scheduleAutosave(250);
+  }
+}
+
+function applyPaletteTextInput() {
+  if (!els.paletteTextInput) return;
+
+  const raw = String(els.paletteTextInput.value || '').trim();
+  const tokens = normalizeCommaList(raw);
+  if (!tokens.length) {
+    setPaletteToField([], { mark: true });
+    return;
+  }
+
+  const valid = [];
+  const invalid = [];
+  for (const token of tokens) {
+    const next = normalizePaletteToken(token);
+    if (next) {
+      valid.push(next);
+    } else {
+      invalid.push(token);
+    }
+  }
+
+  setPaletteToField(valid, { mark: true });
+
+  if (invalid.length) {
+    setFeedback('warn', `Skipped invalid color value(s): ${invalid.join(', ')}`);
+  }
+}
+
+function addPaletteColorFromPicker() {
+  if (!els.paletteColorPicker) return;
+  const token = normalizePaletteToken(els.paletteColorPicker.value);
+  if (!token) return;
+  setPaletteToField([...getPaletteFromField(), token], { mark: true });
+}
+
+function syncTagAndPaletteEditors() {
+  renderTagChipList();
+  renderPaletteChipList();
+
+  if (els.paletteTextInput) {
+    els.paletteTextInput.value = readField('palette');
+  }
+
+  if (els.tagEditorInput) {
+    els.tagEditorInput.value = '';
+  }
+
+  renderPalettePreview();
+}
+
 function renderPalettePreview() {
+  if (!els.palettePreview) return;
+
   const colors = normalizeCommaList(readField('palette'));
   els.palettePreview.innerHTML = '';
 
@@ -520,108 +604,6 @@ function renderPalettePreview() {
   }
 }
 
-function setStatusBadge(status) {
-  const resolved = getStatusClass(status);
-  els.projectStatusBadge.textContent = resolved;
-  els.projectStatusBadge.classList.remove('draft', 'published');
-  els.projectStatusBadge.classList.add(resolved);
-}
-
-function updateToolbarState() {
-  const project = state.activeProject;
-
-  if (!project) {
-    els.activeProjectLabel.textContent = 'No project selected';
-    setStatusBadge('draft');
-    els.deleteBtn.disabled = true;
-    els.unpublishBtn.disabled = true;
-    return;
-  }
-
-  els.activeProjectLabel.textContent = `${project.title || 'Untitled project'} (${project.slug || 'no-slug'})`;
-  setStatusBadge(project.status);
-  els.deleteBtn.disabled = project.status !== 'draft';
-  els.unpublishBtn.disabled = project.status !== 'published';
-}
-
-function renderChecklist(listEl, items, emptyCopy) {
-  listEl.innerHTML = '';
-
-  if (!items || items.length === 0) {
-    const li = document.createElement('li');
-    li.className = 'is-clear';
-    li.textContent = emptyCopy;
-    listEl.appendChild(li);
-    return;
-  }
-
-  for (const item of items) {
-    const li = document.createElement('li');
-    li.textContent = item;
-    listEl.appendChild(li);
-  }
-}
-
-function renderReadinessPanel() {
-  const readiness = state.activeProject?.readiness;
-
-  if (!readiness) {
-    renderChecklist(els.hardMissingList, [], 'Select a project to see requirements.');
-    renderChecklist(els.softMissingList, [], 'No quality warnings.');
-    els.preflightSummary.textContent = '';
-    return;
-  }
-
-  renderChecklist(els.hardMissingList, readiness.hardMissing, 'All hard requirements are complete.');
-  renderChecklist(els.softMissingList, readiness.softMissing, 'No quality warnings.');
-
-  if (readiness.canPublish) {
-    els.preflightSummary.textContent = 'Current project is publish-ready.';
-  } else {
-    els.preflightSummary.textContent = `Current project has ${readiness.hardMissing.length} publish blocker(s).`;
-  }
-}
-
-function projectReadinessClass(project) {
-  if (!project.readiness) return 'blocked';
-  return project.readiness.canPublish ? 'ready' : 'blocked';
-}
-
-function matchesProjectFilter(project) {
-  const filter = state.projectFilter;
-
-  if (filter === 'all') return true;
-  if (filter === 'draft') return project.status === 'draft';
-  if (filter === 'published') return project.status === 'published';
-  if (filter === 'ready') return Boolean(project.readiness?.canPublish);
-  if (filter === 'blocked') return !project.readiness?.canPublish;
-  return true;
-}
-
-function matchesProjectSearch(project) {
-  const query = state.projectSearch.trim().toLowerCase();
-  if (!query) return true;
-
-  const haystack = `${project.title} ${project.slug}`.toLowerCase();
-  return haystack.includes(query);
-}
-
-function getSelectedDraftProjects() {
-  return state.projects.filter((project) => project.status === 'draft' && state.selectedProjectIds.has(project.id));
-}
-
-function syncBulkPublishButton() {
-  const selectedCount = getSelectedDraftProjects().length;
-  els.bulkPublishBtn.textContent = `Publish Selected (${selectedCount})`;
-  els.bulkPublishBtn.disabled = selectedCount === 0;
-}
-
-function pruneSelectedProjects() {
-  const draftIds = new Set(state.projects.filter((project) => project.status === 'draft').map((project) => project.id));
-  state.selectedProjectIds = new Set([...state.selectedProjectIds].filter((id) => draftIds.has(id)));
-  syncBulkPublishButton();
-}
-
 function getProjectSortOrder(project) {
   const value = Number(project?.sortOrder ?? 0);
   return Number.isFinite(value) ? value : 0;
@@ -637,226 +619,210 @@ function compareProjectsByOrder(a, b) {
   return String(a?.id || '').localeCompare(String(b?.id || ''));
 }
 
-function getSortedProjects(projects = state.projects) {
+function getSortedProjects(projects = state.postsState.projects) {
   return [...projects].sort(compareProjectsByOrder);
 }
 
-function canDragSortProjects() {
-  return state.projectFilter === 'all' && !state.projectSearch.trim();
+function isScopeMatch(project) {
+  const scope = state.postsState.scope;
+  if (scope === 'all') return true;
+  if (scope === 'draft') return project.status === 'draft';
+  if (scope === 'published') return project.status === 'published';
+  return true;
 }
 
-function getNextProjectSortOrder() {
-  const sorted = getSortedProjects();
-  if (sorted.length === 0) return 100;
-  return getProjectSortOrder(sorted[sorted.length - 1]) + 100;
+function isSearchMatch(project) {
+  const query = state.postsState.search.trim().toLowerCase();
+  if (!query) return true;
+  const haystack = `${project.title || ''} ${project.slug || ''}`.toLowerCase();
+  return haystack.includes(query);
 }
 
-function clearProjectListDragState() {
-  state.dragProjectId = null;
-  els.projectList
-    .querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after')
-    .forEach((node) => node.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+function getVisibleProjects() {
+  return getSortedProjects().filter((project) => isScopeMatch(project) && isSearchMatch(project));
 }
 
-function patchProjectSortOrders(sortMap) {
-  if (!sortMap || sortMap.size === 0) return;
-
-  state.projects = state.projects.map((project) =>
-    sortMap.has(project.id)
-      ? {
-          ...project,
-          sortOrder: sortMap.get(project.id)
-        }
-      : project
-  );
-
-  if (state.activeProject && sortMap.has(state.activeProject.id)) {
-    state.activeProject = {
-      ...state.activeProject,
-      sortOrder: sortMap.get(state.activeProject.id)
-    };
-  }
+function getStatusBadge(project) {
+  const tone = getStatusClass(project.status);
+  return `<span class="status-pill ${tone}">${escapeHtml(project.status)}</span>`;
 }
 
-async function persistProjectSortUpdates(updates) {
-  for (const update of updates) {
-    await api('/api/admin/projects', {
-      method: 'POST',
-      body: JSON.stringify({
-        id: update.id,
-        sortOrder: update.sortOrder,
-        autosave: true
-      })
-    });
-  }
+function getDisciplineBadge(project) {
+  const label = project.discipline === '3d' ? '3D' : 'Graphic';
+  return `<span class="status-pill admin-v3-discipline-pill">${escapeHtml(label)}</span>`;
 }
 
-function getRebalancedProjectOrder(sortedProjects) {
-  return sortedProjects.map((project, index) => ({
-    id: project.id,
-    sortOrder: (index + 1) * 100
-  }));
+function getScopeCount(scope) {
+  return state.postsState.projects.filter((project) => scope === 'all' || project.status === scope).length;
 }
 
-async function reorderProjectByDrop(projectId, targetIndex) {
-  const sorted = getSortedProjects();
-  const moving = sorted.find((project) => project.id === projectId);
-  if (!moving) return;
+function renderScopeBar() {
+  if (!els.postScopeBar) return;
+  els.postScopeBar.querySelectorAll('[data-scope]').forEach((button) => {
+    const nextScope = button.dataset.scope || 'all';
+    const isActive = nextScope === state.postsState.scope;
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
 
-  const withoutMoving = sorted.filter((project) => project.id !== projectId);
-  const boundedTargetIndex = Math.max(0, Math.min(targetIndex, withoutMoving.length));
-  const prev = withoutMoving[boundedTargetIndex - 1] || null;
-  const next = withoutMoving[boundedTargetIndex] || null;
+    const countEl = button.querySelector('.admin-v3-scope-count');
+    if (!countEl) return;
 
-  const reordered = [...withoutMoving];
-  reordered.splice(boundedTargetIndex, 0, moving);
-
-  let updates = [];
-  if (!prev && !next) {
-    updates = [{ id: projectId, sortOrder: 100 }];
-  } else if (!prev) {
-    updates = [{ id: projectId, sortOrder: getProjectSortOrder(next) - 100 }];
-  } else if (!next) {
-    updates = [{ id: projectId, sortOrder: getProjectSortOrder(prev) + 100 }];
-  } else {
-    const prevOrder = getProjectSortOrder(prev);
-    const nextOrder = getProjectSortOrder(next);
-    const gap = nextOrder - prevOrder;
-
-    if (gap > 0.000001) {
-      updates = [{ id: projectId, sortOrder: prevOrder + gap / 2 }];
-    } else {
-      updates = getRebalancedProjectOrder(reordered);
-    }
-  }
-
-  if (updates.length === 0) return;
-
-  setSaveState('saving', 'Reordering...');
-
-  try {
-    await persistProjectSortUpdates(updates);
-    patchProjectSortOrders(new Map(updates.map((item) => [item.id, item.sortOrder])));
-    renderProjectList();
-    setSaveState('saved');
-  } catch (error) {
-    setSaveState('error');
-    setFeedback('error', error.message);
-    await loadProjects();
-  }
-}
-
-function resolveDropTargetIndex(overItem, pointerY) {
-  const ordered = getSortedProjects().filter((project) => matchesProjectFilter(project) && matchesProjectSearch(project));
-  const draggedId = state.dragProjectId;
-  const sourceIndex = ordered.findIndex((project) => project.id === draggedId);
-  if (sourceIndex === -1) return { ordered, targetIndex: -1 };
-
-  if (!overItem) {
-    return { ordered, targetIndex: ordered.length - 1 };
-  }
-
-  const overId = overItem.dataset.projectId;
-  const overIndex = ordered.findIndex((project) => project.id === overId);
-  if (overIndex === -1) return { ordered, targetIndex: -1 };
-
-  const rect = overItem.getBoundingClientRect();
-  const isAfter = pointerY >= rect.top + rect.height / 2;
-  let targetIndex = overIndex + (isAfter ? 1 : 0);
-
-  if (sourceIndex < targetIndex && overItem) {
-    targetIndex -= 1;
-  }
-
-  return { ordered, targetIndex };
-}
-
-function renderProjectList() {
-  els.projectList.innerHTML = '';
-  pruneSelectedProjects();
-
-  const draggable = canDragSortProjects();
-  const visible = getSortedProjects().filter((project) => matchesProjectFilter(project) && matchesProjectSearch(project));
-
-  if (visible.length === 0) {
-    const li = document.createElement('li');
-    li.textContent = 'No projects match this filter.';
-    els.projectList.appendChild(li);
-    return;
-  }
-
-  for (const project of visible) {
-    const li = document.createElement('li');
-    li.dataset.projectId = project.id;
-    li.className = 'admin-v2-project-item';
-    li.draggable = draggable;
-    if (draggable) {
-      li.classList.add('is-draggable');
-    }
-
-    const rowTone = projectReadinessClass(project);
-    const dragHandle = draggable ? '<span class="admin-v2-drag-handle" aria-hidden="true">::</span>' : '';
-    const entry = document.createElement('div');
-    entry.className = 'admin-v2-project-entry';
-
-    const selectWrap = document.createElement('label');
-    selectWrap.className = 'admin-v2-project-select-wrap';
-    const selectInput = document.createElement('input');
-    selectInput.type = 'checkbox';
-    selectInput.className = 'admin-v2-project-select';
-    selectInput.title = 'Select draft for bulk publish';
-    selectInput.setAttribute('aria-label', `Select ${project.title || project.slug || 'project'} for bulk publish`);
-    selectInput.disabled = project.status !== 'draft';
-    selectInput.checked = project.status === 'draft' && state.selectedProjectIds.has(project.id);
-    selectInput.addEventListener('click', (event) => {
-      event.stopPropagation();
-    });
-    selectInput.addEventListener('change', () => {
-      if (selectInput.checked) {
-        state.selectedProjectIds.add(project.id);
-      } else {
-        state.selectedProjectIds.delete(project.id);
-      }
-      syncBulkPublishButton();
-    });
-    selectWrap.appendChild(selectInput);
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = `project-row ${project.id === state.activeId ? 'active' : ''}`;
-    button.innerHTML = `
-      <div class="admin-v2-row-head">
-        <strong>${escapeHtml(project.title)}</strong>
-        <span class="status-pill ${escapeHtml(getStatusClass(project.status))}">${escapeHtml(project.status)}</span>
-      </div>
-      <div class="admin-v2-row-foot">
-        <span>${dragHandle}/${escapeHtml(project.slug)}</span>
-        <span class="admin-v2-readiness-pill ${rowTone}">${rowTone}</span>
-      </div>
-    `;
-
-    button.addEventListener('click', () => {
-      selectProject(project.id).catch((error) => setFeedback('error', error.message));
-    });
-
-    entry.appendChild(selectWrap);
-    entry.appendChild(button);
-    li.appendChild(entry);
-    els.projectList.appendChild(li);
-  }
-
-  syncBulkPublishButton();
-}
-
-function updateFilterButtons() {
-  const chips = Array.from(els.filterBar.querySelectorAll('button[data-filter]'));
-  chips.forEach((chip) => {
-    chip.setAttribute('aria-pressed', chip.dataset.filter === state.projectFilter ? 'true' : 'false');
+    const count = nextScope === 'all' ? getScopeCount('all') : getScopeCount(nextScope);
+    countEl.textContent = String(count);
   });
 }
 
+function canReorderPosts() {
+  return state.postsState.reorderMode && state.postsState.scope === 'all' && !state.postsState.search.trim();
+}
+
+function renderReorderToggle() {
+  if (!els.reorderToggleBtn) return;
+
+  const canEnable = state.postsState.scope === 'all' && !state.postsState.search.trim();
+  els.reorderToggleBtn.disabled = !canEnable;
+  els.reorderToggleBtn.setAttribute('aria-pressed', state.postsState.reorderMode ? 'true' : 'false');
+  els.reorderToggleBtn.textContent = state.postsState.reorderMode ? 'Done Reordering' : 'Reorder';
+}
+
+function projectItemMarkup(project, collection, index) {
+  const isActive = project.id === state.editorState.activeId;
+  const reorderEnabled = canReorderPosts();
+  const isFirst = index === 0;
+  const isLast = index === collection.length - 1;
+  const isDeleteDisabled = project.status === 'published';
+  const deleteTitle = isDeleteDisabled ? 'Only draft posts can be deleted' : 'Delete draft';
+
+  return `
+    <li
+      class="admin-v3-post-item ${isActive ? 'active' : ''}"
+      data-project-id="${escapeHtml(project.id)}"
+      data-project-status="${escapeHtml(project.status)}"
+      draggable="${reorderEnabled ? 'true' : 'false'}"
+    >
+      <div class="admin-v3-post-row ${reorderEnabled ? 'is-reorder' : ''}">
+        ${
+          reorderEnabled
+            ? `
+          <div class="admin-v3-reorder-controls" aria-label="Reorder controls">
+            <button type="button" class="admin-v3-reorder-btn" data-action="move-up" data-project-id="${escapeHtml(project.id)}" ${isFirst ? 'disabled' : ''} aria-label="Move up">↑</button>
+            <button type="button" class="admin-v3-reorder-btn" data-action="move-down" data-project-id="${escapeHtml(project.id)}" ${isLast ? 'disabled' : ''} aria-label="Move down">↓</button>
+          </div>
+        `
+            : ''
+        }
+        <div class="admin-v3-post-main">
+          <div class="admin-v3-post-top">
+            <button type="button" class="admin-v3-post-open" data-action="open-post" data-project-id="${escapeHtml(project.id)}">
+              <span class="admin-v3-post-title">${escapeHtml(project.title || 'Untitled post')}</span>
+              <span class="admin-v3-post-meta">/${escapeHtml(project.slug || 'no-slug')}</span>
+              <span class="admin-v3-post-pills">${getStatusBadge(project)} ${getDisciplineBadge(project)}</span>
+            </button>
+            <button
+              type="button"
+              class="admin-v3-delete-icon-btn"
+              data-action="delete"
+              data-project-id="${escapeHtml(project.id)}"
+              ${isDeleteDisabled ? 'disabled' : ''}
+              aria-label="${deleteTitle}"
+              title="${deleteTitle}"
+            >🗑</button>
+          </div>
+        </div>
+      </div>
+    </li>
+  `;
+}
+
+function renderPostGroups() {
+  renderScopeBar();
+  renderReorderToggle();
+
+  const visible = getVisibleProjects();
+  const draftPosts = visible.filter((project) => project.status === 'draft');
+  const publishedPosts = visible.filter((project) => project.status === 'published');
+
+  if (els.draftsCount) {
+    els.draftsCount.textContent = `${draftPosts.length}`;
+  }
+
+  if (els.publishedCount) {
+    els.publishedCount.textContent = `${publishedPosts.length}`;
+  }
+
+  if (els.draftPostList) {
+    els.draftPostList.innerHTML = draftPosts.length
+      ? draftPosts.map((project, index) => projectItemMarkup(project, draftPosts, index)).join('')
+      : '<li class="admin-v3-empty">No draft posts in this filter.</li>';
+  }
+
+  if (els.publishedPostList) {
+    els.publishedPostList.innerHTML = publishedPosts.length
+      ? publishedPosts.map((project, index) => projectItemMarkup(project, publishedPosts, index)).join('')
+      : '<li class="admin-v3-empty">No published posts in this filter.</li>';
+  }
+
+  updateToolbarState();
+}
+
+function updateToolbarState() {
+  const project = state.editorState.activeProject;
+  const publishLabel = project?.status === 'published' ? 'Unpublish' : 'Publish';
+  renderLivePendingState();
+
+  if (!project) {
+    if (els.activeProjectLabel) els.activeProjectLabel.textContent = 'No post selected';
+    if (els.projectStatusBadge) {
+      els.projectStatusBadge.textContent = 'draft';
+      els.projectStatusBadge.classList.remove('published');
+      els.projectStatusBadge.classList.add('draft');
+    }
+
+    [els.saveNowBtn, els.previewBtn, els.publishToggleBtn, els.deleteBtn, els.mobileSaveBtn, els.mobilePreviewBtn, els.mobilePublishBtn, els.mobileDeleteBtn].forEach((node) => {
+      if (node) node.disabled = true;
+    });
+
+    return;
+  }
+
+  if (els.activeProjectLabel) {
+    els.activeProjectLabel.textContent = `${project.title || 'Untitled post'} (${project.slug || 'no-slug'})`;
+  }
+
+  if (els.projectStatusBadge) {
+    els.projectStatusBadge.textContent = project.status;
+    els.projectStatusBadge.classList.remove('draft', 'published');
+    els.projectStatusBadge.classList.add(getStatusClass(project.status));
+  }
+
+  if (els.publishToggleBtn) {
+    els.publishToggleBtn.textContent = publishLabel;
+    els.publishToggleBtn.disabled = false;
+  }
+
+  if (els.mobilePublishBtn) {
+    els.mobilePublishBtn.textContent = publishLabel;
+    els.mobilePublishBtn.disabled = false;
+  }
+
+  if (els.deleteBtn) {
+    els.deleteBtn.disabled = project.status !== 'draft';
+  }
+
+  if (els.mobileDeleteBtn) {
+    els.mobileDeleteBtn.disabled = project.status !== 'draft';
+  }
+
+  [els.saveNowBtn, els.previewBtn, els.mobileSaveBtn, els.mobilePreviewBtn].forEach((node) => {
+    if (node) node.disabled = false;
+  });
+}
+
+function getActiveProject() {
+  return state.editorState.activeProject;
+}
+
 function populateForm(project) {
-  state.isPopulating = true;
+  state.editorState.isPopulating = true;
 
   writeField('id', project.id || '');
   writeField('slug', project.slug || '');
@@ -876,24 +842,23 @@ function populateForm(project) {
   writeField('tags', (project.tags || []).join(','));
 
   syncThreeDFields();
-  renderPalettePreview();
+  syncTagAndPaletteEditors();
   updateToolbarState();
-  renderReadinessPanel();
 
   const payload = projectPayloadFromForm();
-  state.lastSavedFingerprint = payloadFingerprint(payload);
-  state.hasDirtyChanges = false;
+  state.editorState.lastSavedFingerprint = payloadFingerprint(payload);
+  state.editorState.hasDirtyChanges = false;
   setSaveState('saved');
 
-  state.isPopulating = false;
+  state.editorState.isPopulating = false;
 }
 
 function clearEditor() {
-  state.activeId = null;
-  state.activeProject = null;
-  state.selectedAssetId = null;
-  state.dragAssetId = null;
-  state.assetDrafts = new Map();
+  state.editorState.activeId = null;
+  state.editorState.activeProject = null;
+  state.mediaState.selectedAssetId = null;
+  state.mediaState.dragAssetId = null;
+  state.mediaState.assetDrafts = new Map();
 
   writeField('id', '');
   writeField('slug', '');
@@ -912,95 +877,139 @@ function clearEditor() {
   writeField('palette', '');
   writeField('tags', '');
 
-  renderPalettePreview();
+  syncTagAndPaletteEditors();
   syncThreeDFields();
   renderAssetEditors([]);
   clearUploadQueue();
   updateToolbarState();
-  renderReadinessPanel();
   setSaveState('saved');
 }
 
 function syncActiveSummary() {
-  if (!state.activeProject) return;
-  const idx = state.projects.findIndex((item) => item.id === state.activeProject.id);
-  if (idx === -1) return;
+  const activeProject = getActiveProject();
+  if (!activeProject) return;
 
-  state.projects[idx] = {
-    ...state.projects[idx],
-    id: state.activeProject.id,
-    slug: state.activeProject.slug,
-    title: state.activeProject.title,
-    discipline: state.activeProject.discipline,
-    status: state.activeProject.status,
-    sortOrder: state.activeProject.sortOrder,
-    readiness: state.activeProject.readiness
+  const index = state.postsState.projects.findIndex((item) => item.id === activeProject.id);
+  if (index === -1) return;
+
+  state.postsState.projects[index] = {
+    ...state.postsState.projects[index],
+    id: activeProject.id,
+    slug: activeProject.slug,
+    title: activeProject.title,
+    discipline: activeProject.discipline,
+    status: activeProject.status,
+    sortOrder: activeProject.sortOrder,
+    descriptionShort: activeProject.descriptionShort,
+    tags: activeProject.tags,
+    coverAssetId: activeProject.coverAssetId,
+    readiness: activeProject.readiness
   };
 }
 
-async function loadProjects() {
-  const payload = await api('/api/admin/projects');
-  state.projects = payload.projects || [];
+function focusPrimaryTitleField() {
+  const titleField = field('title');
+  if (titleField && typeof titleField.focus === 'function') {
+    titleField.focus();
+    titleField.select?.();
+  }
+}
 
-  if (state.projects.length === 0) {
-    renderProjectList();
+async function loadProjects(preferredId = null) {
+  const payload = await api('/api/admin/projects');
+  state.postsState.projects = payload.projects || [];
+
+  if (!state.postsState.projects.length) {
+    renderPostGroups();
     clearEditor();
     return;
   }
 
-  const currentExists = state.activeId && state.projects.some((project) => project.id === state.activeId);
-  const nextId = currentExists ? state.activeId : state.projects[0].id;
+  const activeId = state.editorState.activeId;
+  const preferredExists = preferredId && state.postsState.projects.some((project) => project.id === preferredId);
+  const activeExists = activeId && state.postsState.projects.some((project) => project.id === activeId);
+  const nextId = preferredExists ? preferredId : activeExists ? activeId : getSortedProjects()[0].id;
 
-  renderProjectList();
-  await selectProject(nextId);
+  renderPostGroups();
+  await openProject(nextId, { skipListRender: true, switchToEditOnMobile: false });
 }
 
-async function selectProject(id, options = {}) {
+async function openProject(id, options = {}) {
+  if (!id) return;
+
   clearAutosaveTimer();
 
   const payload = await api(`/api/admin/projects/${id}`);
-  state.activeId = id;
-  state.activeProject = payload.project;
-  state.assetDrafts = new Map();
+  state.editorState.activeId = id;
+  state.editorState.activeProject = payload.project;
+
+  state.mediaState.selectedAssetId = null;
+  state.mediaState.dragAssetId = null;
+  state.mediaState.assetDrafts = new Map();
 
   populateForm(payload.project);
   renderAssetEditors(payload.project.assets || []);
   syncActiveSummary();
 
   if (!options.skipListRender) {
-    renderProjectList();
+    renderPostGroups();
+  }
+
+  if (options.switchToEditOnMobile !== false) {
+    setMobileTab('edit');
   }
 }
 
-async function saveProject(options = {}) {
-  if (!state.activeProject) return null;
+function getNextDraftSortOrder() {
+  const drafts = state.postsState.projects.filter((project) => project.status === 'draft');
+  if (!drafts.length) return 100;
+  const maxOrder = drafts.reduce((max, project) => Math.max(max, getProjectSortOrder(project)), 0);
+  return maxOrder + 100;
+}
 
-  const { autosave = false, statusOverride, silent = false } = options;
-  const payload = projectPayloadFromForm(statusOverride);
+function getNextPublishedSortOrder() {
+  const published = state.postsState.projects.filter((project) => project.status === 'published');
+  if (!published.length) return 100100;
+  const maxOrder = published.reduce((max, project) => Math.max(max, getProjectSortOrder(project)), 100000);
+  return maxOrder + 100;
+}
+
+async function saveProject(options = {}) {
+  const activeProject = getActiveProject();
+  if (!activeProject) return null;
+  const wasPublishedBeforeSave = activeProject.status === 'published';
+
+  const { autosave = false, statusOverride, silent = false, sortOrderOverride } = options;
+  const payload = projectPayloadFromForm(statusOverride, sortOrderOverride);
+
   if (!payload.slug) {
-    state.hasDirtyChanges = true;
+    state.editorState.hasDirtyChanges = true;
+
     if (autosave) {
-      setSaveState('unsaved', 'Slug required');
-      return state.activeProject;
+      setSaveState('unsaved', 'Slug is required');
+      return activeProject;
     }
+
     setSaveState('error');
-    if (!silent) {
-      setFeedback('error', 'Slug is required.');
-    }
+    if (!silent) setFeedback('error', 'Slug is required.');
     throw new Error('Slug is required.');
   }
 
   const nextFingerprint = payloadFingerprint(payload);
-  if (autosave && !state.hasDirtyChanges && nextFingerprint === state.lastSavedFingerprint) {
-    return state.activeProject;
+  if (
+    autosave &&
+    !state.editorState.hasDirtyChanges &&
+    nextFingerprint === state.editorState.lastSavedFingerprint
+  ) {
+    return activeProject;
   }
 
-  if (state.isSaving) {
-    state.queuedSave = options;
+  if (state.editorState.isSaving) {
+    state.editorState.queuedSave = options;
     return null;
   }
 
-  state.isSaving = true;
+  state.editorState.isSaving = true;
   setSaveState('saving');
 
   try {
@@ -1013,21 +1022,25 @@ async function saveProject(options = {}) {
       throw new Error('Project save response is missing project data.');
     }
 
-    state.activeProject = response.project;
-    state.activeId = response.project.id;
+    state.editorState.activeProject = response.project;
+    state.editorState.activeId = response.project.id;
+
+    if (wasPublishedBeforeSave || response.project.status === 'published') {
+      markLiveChangesPending();
+    }
 
     populateForm(response.project);
     renderAssetEditors(response.project.assets || []);
     syncActiveSummary();
-    renderProjectList();
+    renderPostGroups();
 
     if (!autosave && !silent) {
-      setFeedback('success', 'Project saved.');
+      setFeedback('success', 'Post saved.');
     }
 
     return response.project;
   } catch (error) {
-    state.hasDirtyChanges = true;
+    state.editorState.hasDirtyChanges = true;
     setSaveState('error');
 
     if (!silent || !autosave) {
@@ -1036,84 +1049,405 @@ async function saveProject(options = {}) {
 
     throw error;
   } finally {
-    state.isSaving = false;
+    state.editorState.isSaving = false;
 
-    if (state.queuedSave) {
-      const queued = state.queuedSave;
-      state.queuedSave = null;
+    if (state.editorState.queuedSave) {
+      const queued = state.editorState.queuedSave;
+      state.editorState.queuedSave = null;
       setTimeout(() => {
-        saveProject(queued).catch((error) => {
-          setFeedback('error', error.message);
-        });
+        saveProject(queued).catch((error) => setFeedback('error', error.message));
       }, 0);
     }
   }
 }
 
-async function createProjectPreset(discipline) {
+async function createNewPost() {
   clearFeedback();
 
   const now = Date.now();
-  const suffix = discipline === '3d' ? '3d' : 'graphic';
-  const payload = await api('/api/admin/projects', {
+  const response = await api('/api/admin/projects', {
     method: 'POST',
     body: JSON.stringify({
-      title: discipline === '3d' ? 'New 3D Project' : 'New Graphic Project',
-      slug: `new-${suffix}-${now}`,
-      discipline,
+      title: 'New Post',
+      slug: `new-post-${now}`,
+      discipline: 'graphic',
       status: 'draft',
       year: CURRENT_YEAR,
       descriptionShort: '',
       descriptionLong: '',
-      sortOrder: getNextProjectSortOrder(),
+      sortOrder: getNextDraftSortOrder(),
       palette: [],
       tags: []
     })
   });
 
-  await loadProjects();
-  await selectProject(payload.project.id);
-  setFeedback('success', 'Project created. Start typing to autosave.');
+  await loadProjects(response.project.id);
+  await openProject(response.project.id, { skipListRender: false, switchToEditOnMobile: true });
+  focusPrimaryTitleField();
+  setFeedback('success', 'Draft created. Fill in the essentials to get started.');
 }
 
-async function deleteActiveDraftProject() {
-  if (!state.activeProject || !state.activeId) {
-    setFeedback('error', 'Select a project first.');
+function openBlockerDialog(blockers, headingText) {
+  if (!els.blockerDialog || !els.blockerIntro || !els.blockerList) return;
+
+  els.blockerIntro.textContent = headingText || 'Fix the items below before publishing.';
+  els.blockerList.innerHTML = '';
+
+  for (const blocker of blockers) {
+    const li = document.createElement('li');
+    li.textContent = blocker;
+    els.blockerList.appendChild(li);
+  }
+
+  if (!blockers.length) {
+    const li = document.createElement('li');
+    li.className = 'is-clear';
+    li.textContent = 'No blockers found.';
+    els.blockerList.appendChild(li);
+  }
+
+  if (typeof els.blockerDialog.showModal === 'function') {
+    if (!els.blockerDialog.open) els.blockerDialog.showModal();
+  } else {
+    els.blockerDialog.setAttribute('open', '');
+  }
+}
+
+function closeBlockerDialog() {
+  if (!els.blockerDialog) return;
+
+  if (typeof els.blockerDialog.close === 'function') {
+    if (els.blockerDialog.open) els.blockerDialog.close();
+  } else {
+    els.blockerDialog.removeAttribute('open');
+  }
+}
+
+function getDryRunBlockers(dryRunPayload) {
+  const blockers = [];
+
+  if (Array.isArray(dryRunPayload?.errors)) {
+    blockers.push(...dryRunPayload.errors);
+  }
+
+  const globalBlocked = (dryRunPayload?.readiness || []).filter((entry) => !entry.canPublish);
+  for (const entry of globalBlocked) {
+    const firstIssue = entry.hardMissing?.[0] || 'Missing required fields';
+    blockers.push(`Published post "${entry.title}": ${firstIssue}`);
+  }
+
+  return [...new Set(blockers)];
+}
+
+async function setProjectStatusOnly(projectId, nextStatus) {
+  const project = state.postsState.projects.find((item) => item.id === projectId);
+  if (!project) {
+    setFeedback('error', 'Post not found.');
     return;
   }
 
-  if (state.activeProject.status !== 'draft') {
-    setFeedback('error', 'Only draft projects can be deleted.');
+  if (state.editorState.activeId === projectId && state.editorState.hasDirtyChanges) {
+    await saveProject({ autosave: false, silent: true });
+    await openProject(projectId, { switchToEditOnMobile: false });
+  }
+
+  clearFeedback();
+
+  const sortOrder = nextStatus === 'published' ? getNextPublishedSortOrder() : getNextDraftSortOrder();
+
+  await api('/api/admin/projects', {
+    method: 'POST',
+    body: JSON.stringify({
+      id: projectId,
+      status: nextStatus,
+      sortOrder,
+      autosave: true
+    })
+  });
+
+  markLiveChangesPending();
+  if (nextStatus === 'published') {
+    setFeedback('success', 'Marked as published. Click "Republish Site" to deploy all pending changes.');
+  } else {
+    setFeedback('success', 'Moved to draft. Click "Republish Site" to update the live site.');
+  }
+
+  await loadProjects(projectId);
+  await openProject(projectId, { switchToEditOnMobile: false });
+}
+
+async function publishPost(projectId) {
+  await setProjectStatusOnly(projectId, 'published');
+}
+
+async function unpublishPost(projectId) {
+  const project = state.postsState.projects.find((item) => item.id === projectId);
+  if (!project) {
+    setFeedback('error', 'Post not found.');
     return;
   }
 
   const confirmed = window.confirm(
-    `Delete draft project "${state.activeProject.title}"? This removes associated assets and cannot be undone.`
+    `Move "${project.title || 'Untitled post'}" back to draft? This change will go live after you click "Republish Site".`
   );
-
   if (!confirmed) return;
 
-  clearFeedback();
+  await setProjectStatusOnly(projectId, 'draft');
+}
+
+async function togglePublishPost(projectId) {
+  const project = state.postsState.projects.find((item) => item.id === projectId);
+  if (!project) return;
+
+  if (project.status === 'published') {
+    await unpublishPost(projectId);
+    return;
+  }
+
+  await publishPost(projectId);
+}
+
+async function republishSite() {
+  const confirmed = window.confirm(
+    'Republish site now? This will trigger a new deployment and publish all pending new or updated posts and ordering changes.'
+  );
+  if (!confirmed) return;
+
+  if (els.republishSiteBtn) {
+    els.republishSiteBtn.disabled = true;
+    els.republishSiteBtn.textContent = 'Republishing...';
+  }
+  if (els.mobileRepublishBtn) {
+    els.mobileRepublishBtn.disabled = true;
+    els.mobileRepublishBtn.textContent = 'Republishing...';
+  }
 
   try {
-    const payload = await api(`/api/admin/projects/${state.activeId}`, {
-      method: 'DELETE',
+    if (state.editorState.hasDirtyChanges && state.editorState.activeId) {
+      await saveProject({ autosave: false, silent: true });
+      await openProject(state.editorState.activeId, { switchToEditOnMobile: false });
+    }
+
+    const dryRun = await api('/api/admin/publish', {
+      method: 'POST',
+      body: JSON.stringify({ dryRun: true })
+    });
+
+    const blockers = getDryRunBlockers(dryRun);
+    if (blockers.length > 0) {
+      openBlockerDialog(blockers, 'Republish is blocked until these issues are fixed.');
+      return;
+    }
+
+    const publishPayload = await api('/api/admin/publish', {
+      method: 'POST',
       body: JSON.stringify({})
     });
 
-    state.activeId = null;
-    state.activeProject = null;
+    const warningText = publishPayload.warnings?.length
+      ? ` Warnings: ${publishPayload.warnings.join(' | ')}`
+      : '';
 
-    await loadProjects();
+    clearLiveChangesPending();
+    setFeedback('success', `Republished. Snapshot: ${publishPayload.snapshotKey}.${warningText}`);
 
-    if (payload.warning) {
-      setFeedback('warn', `Draft deleted. R2 warning: ${payload.warning}`);
-    } else {
-      setFeedback('success', 'Draft deleted.');
+    await loadProjects(state.editorState.activeId);
+  } finally {
+    if (els.republishSiteBtn) {
+      els.republishSiteBtn.textContent = 'Republish Site';
     }
-  } catch (error) {
-    setFeedback('error', error.message);
+    if (els.mobileRepublishBtn) {
+      els.mobileRepublishBtn.textContent = 'Republish';
+    }
+    renderLivePendingState();
   }
+}
+
+async function deleteDraftPost(projectId) {
+  const project = state.postsState.projects.find((item) => item.id === projectId);
+  if (!project) {
+    setFeedback('error', 'Post not found.');
+    return;
+  }
+
+  if (project.status !== 'draft') {
+    setFeedback('error', 'Only draft posts can be deleted.');
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Delete draft "${project.title || 'Untitled post'}"? This removes all attached assets and cannot be undone.`
+  );
+  if (!confirmed) return;
+
+  const sorted = getSortedProjects();
+  const index = sorted.findIndex((item) => item.id === projectId);
+  const fallbackId = sorted[index + 1]?.id || sorted[index - 1]?.id || null;
+
+  clearFeedback();
+
+  const payload = await api(`/api/admin/projects/${projectId}`, {
+    method: 'DELETE',
+    body: JSON.stringify({})
+  });
+
+  if (payload.warning) {
+    setFeedback('warn', `Draft deleted. R2 warning: ${payload.warning}`);
+  } else {
+    setFeedback('success', 'Draft deleted.');
+  }
+
+  if (state.editorState.activeId === projectId) {
+    state.editorState.activeId = null;
+    state.editorState.activeProject = null;
+  }
+
+  await loadProjects(fallbackId);
+  if (!fallbackId && state.postsState.projects.length === 0) {
+    clearEditor();
+  }
+}
+
+function applySortUpdates(sortMap) {
+  if (!sortMap?.size) return;
+
+  state.postsState.projects = state.postsState.projects.map((project) =>
+    sortMap.has(project.id) ? { ...project, sortOrder: sortMap.get(project.id) } : project
+  );
+
+  if (state.editorState.activeProject && sortMap.has(state.editorState.activeProject.id)) {
+    state.editorState.activeProject = {
+      ...state.editorState.activeProject,
+      sortOrder: sortMap.get(state.editorState.activeProject.id)
+    };
+  }
+}
+
+async function persistProjectSortUpdates(updates) {
+  for (const update of updates) {
+    await api('/api/admin/projects', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: update.id,
+        sortOrder: update.sortOrder,
+        autosave: true
+      })
+    });
+  }
+}
+
+function getStatusCollection(status) {
+  return getSortedProjects().filter((project) => project.status === status);
+}
+
+function buildStatusSortUpdates(status, orderedProjects) {
+  const base = status === 'published' ? 100000 : 100;
+  return orderedProjects.map((project, index) => ({
+    id: project.id,
+    sortOrder: base + (index + 1) * 100
+  }));
+}
+
+async function reorderStatusCollection(status, orderedProjects) {
+  const updates = buildStatusSortUpdates(status, orderedProjects);
+  const sortMap = new Map(updates.map((item) => [item.id, item.sortOrder]));
+  applySortUpdates(sortMap);
+  renderPostGroups();
+  setSaveState('saving', 'Saving order...');
+
+  try {
+    await persistProjectSortUpdates(updates);
+    if (status === 'published') {
+      markLiveChangesPending();
+    }
+    setSaveState('saved');
+    setFeedback('success', 'Post order updated.');
+  } catch (error) {
+    setSaveState('error');
+    setFeedback('error', error.message);
+    await loadProjects(state.editorState.activeId);
+  }
+}
+
+async function movePostByStep(projectId, direction) {
+  const project = state.postsState.projects.find((item) => item.id === projectId);
+  if (!project) return;
+
+  const group = getStatusCollection(project.status);
+  const index = group.findIndex((item) => item.id === projectId);
+  if (index === -1) return;
+
+  const targetIndex = index + direction;
+  if (targetIndex < 0 || targetIndex >= group.length) return;
+
+  const reordered = [...group];
+  const [moving] = reordered.splice(index, 1);
+  reordered.splice(targetIndex, 0, moving);
+
+  await reorderStatusCollection(project.status, reordered);
+}
+
+function clearPostDragState() {
+  state.postsState.dragProjectId = null;
+  state.postsState.dragProjectStatus = null;
+
+  [els.draftPostList, els.publishedPostList].forEach((list) => {
+    if (!list) return;
+    list
+      .querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after')
+      .forEach((node) => node.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
+  });
+}
+
+async function handlePostDrop(status, draggedId, overId, pointerY) {
+  const group = getStatusCollection(status);
+  const sourceIndex = group.findIndex((item) => item.id === draggedId);
+  const overIndex = group.findIndex((item) => item.id === overId);
+
+  if (sourceIndex === -1 || overIndex === -1) return;
+
+  const overNode = document.querySelector(`li[data-project-id="${overId}"]`);
+  if (!overNode) return;
+
+  const rect = overNode.getBoundingClientRect();
+  const isAfter = pointerY >= rect.top + rect.height / 2;
+  let targetIndex = overIndex + (isAfter ? 1 : 0);
+
+  if (sourceIndex < targetIndex) targetIndex -= 1;
+  if (targetIndex === sourceIndex) return;
+
+  const reordered = [...group];
+  const [moving] = reordered.splice(sourceIndex, 1);
+  reordered.splice(targetIndex, 0, moving);
+
+  await reorderStatusCollection(status, reordered);
+}
+
+function handlePostInput(event) {
+  const target = event.target;
+  if (!target || !('name' in target) || !target.name) return;
+  if (target.closest('.admin-v2-asset-card')) return;
+
+  markDirty();
+
+  if (target.name === 'discipline') {
+    syncThreeDFields();
+  }
+
+  if (target.name === 'palette' || target.name === 'tags') {
+    syncTagAndPaletteEditors();
+  }
+
+  scheduleAutosave();
+}
+
+function handlePostBlur(event) {
+  const target = event.target;
+  if (!target || !('name' in target) || !target.name) return;
+  if (target.closest('.admin-v2-asset-card')) return;
+
+  markDirty();
+  scheduleAutosave(0);
 }
 
 function isModelFile(file) {
@@ -1153,34 +1487,33 @@ function humanizeFilename(name) {
 }
 
 function clearUploadQueue() {
-  state.uploadQueue = [];
-  els.uploadStatus.textContent = '';
+  state.mediaState.uploadQueue = [];
+  if (els.uploadStatus) {
+    els.uploadStatus.textContent = '';
+  }
 }
 
-function renderUploadQueue() {
-  // Upload queue cards were removed; assets appear only in "Manage Uploaded Assets".
-}
-
-function nextSortOrder(baseAssets, offset) {
+function nextAssetSortOrder(baseAssets, offset) {
   if (!baseAssets || baseAssets.length === 0) return offset + 1;
   const max = baseAssets.reduce((highest, item) => Math.max(highest, Number(item.sortOrder || 0)), 0);
   return max + offset + 1;
 }
 
 async function uploadSingleQueueItem(item) {
-  if (!state.activeId) {
-    throw new Error('Select or create a project first.');
+  const activeProject = getActiveProject();
+  if (!activeProject?.id) {
+    throw new Error('Select or create a post first.');
   }
 
   item.status = 'signing';
-
   const mimeType = inferMimeType(item.file);
+
   const signed = await api('/api/admin/upload-url', {
     method: 'POST',
     body: JSON.stringify({
       filename: item.file.name,
       mimeType,
-      projectId: state.activeId
+      projectId: activeProject.id
     })
   });
 
@@ -1199,7 +1532,7 @@ async function uploadSingleQueueItem(item) {
 
   item.status = 'attaching';
 
-  await api(`/api/admin/projects/${state.activeId}/assets`, {
+  await api(`/api/admin/projects/${activeProject.id}/assets`, {
     method: 'POST',
     body: JSON.stringify({
       kind: item.kind,
@@ -1216,13 +1549,16 @@ async function uploadSingleQueueItem(item) {
 }
 
 async function processUploadQueue(items) {
+  const wasPublishedBeforeUpload = getActiveProject()?.status === 'published';
   let uploaded = 0;
 
   for (const item of items) {
     try {
       await uploadSingleQueueItem(item);
       uploaded += 1;
-      els.uploadStatus.textContent = `Uploaded ${uploaded}/${items.length} file(s).`;
+      if (els.uploadStatus) {
+        els.uploadStatus.textContent = `Uploaded ${uploaded}/${items.length} file(s).`;
+      }
     } catch (error) {
       item.status = 'failed';
       item.error = error.message;
@@ -1237,23 +1573,28 @@ async function processUploadQueue(items) {
     setFeedback('success', `Uploaded ${uploaded} file(s).`);
   }
 
-  state.uploadQueue = [];
-  await selectProject(state.activeId);
+  if (wasPublishedBeforeUpload && uploaded > 0) {
+    markLiveChangesPending();
+  }
+
+  state.mediaState.uploadQueue = [];
+  if (state.editorState.activeId) {
+    await openProject(state.editorState.activeId, { switchToEditOnMobile: false });
+  }
 }
 
 async function enqueueUploads(files) {
-  if (!state.activeProject || !state.activeId) {
-    setFeedback('error', 'Select or create a project first.');
+  const activeProject = getActiveProject();
+  if (!activeProject?.id) {
+    setFeedback('error', 'Select or create a post first.');
     return;
   }
 
   if (!files.length) return;
 
-  clearFeedback();
-
   const queuedKinds = [];
   const newItems = files.map((file, idx) => {
-    const kind = inferAssetKind(file, state.activeProject.discipline, state.activeProject.assets || [], queuedKinds);
+    const kind = inferAssetKind(file, activeProject.discipline, activeProject.assets || [], queuedKinds);
     queuedKinds.push(kind);
 
     return {
@@ -1262,15 +1603,45 @@ async function enqueueUploads(files) {
       kind,
       status: 'queued',
       error: '',
-      sortOrder: nextSortOrder(state.activeProject.assets || [], idx)
+      sortOrder: nextAssetSortOrder(activeProject.assets || [], idx)
     };
   });
 
-  state.uploadQueue = [...newItems];
-  renderUploadQueue();
+  state.mediaState.uploadQueue = [...newItems];
 
-  els.uploadStatus.textContent = `Uploading ${newItems.length} file(s)...`;
+  if (els.uploadStatus) {
+    els.uploadStatus.textContent = `Uploading ${newItems.length} file(s)...`;
+  }
+
   await processUploadQueue(newItems);
+}
+
+function getAssetSortOrder(asset) {
+  const value = Number(asset?.sortOrder ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function compareAssetsByOrder(a, b) {
+  const orderDelta = getAssetSortOrder(a) - getAssetSortOrder(b);
+  if (orderDelta !== 0) return orderDelta;
+  return String(a?.id || '').localeCompare(String(b?.id || ''));
+}
+
+function getSortedAssets(assets = []) {
+  return [...assets].sort(compareAssetsByOrder);
+}
+
+function getAssetById(assetId) {
+  const activeProject = getActiveProject();
+  if (!assetId || !activeProject) return null;
+  return activeProject.assets.find((asset) => asset.id === assetId) || null;
+}
+
+function getResolvedAsset(asset) {
+  return {
+    ...asset,
+    ...(state.mediaState.assetDrafts.get(asset.id) || {})
+  };
 }
 
 function assetPreviewMarkup(asset, allAssets) {
@@ -1293,33 +1664,6 @@ function assetPreviewMarkup(asset, allAssets) {
   return `<img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || asset.r2Key)}" loading="lazy" />`;
 }
 
-function getAssetSortOrder(asset) {
-  const value = Number(asset?.sortOrder ?? 0);
-  return Number.isFinite(value) ? value : 0;
-}
-
-function compareAssetsByOrder(a, b) {
-  const orderDelta = getAssetSortOrder(a) - getAssetSortOrder(b);
-  if (orderDelta !== 0) return orderDelta;
-  return String(a?.id || '').localeCompare(String(b?.id || ''));
-}
-
-function getSortedAssets(assets = []) {
-  return [...assets].sort(compareAssetsByOrder);
-}
-
-function getAssetById(assetId) {
-  if (!assetId || !state.activeProject) return null;
-  return state.activeProject.assets.find((asset) => asset.id === assetId) || null;
-}
-
-function getResolvedAsset(asset) {
-  return {
-    ...asset,
-    ...(state.assetDrafts.get(asset.id) || {})
-  };
-}
-
 function getAssetThumbMarkup(asset, allAssets) {
   if (asset.kind === 'model3d') {
     const posterAsset = allAssets.find((item) => item.kind === 'poster');
@@ -1334,18 +1678,21 @@ function getAssetThumbMarkup(asset, allAssets) {
 }
 
 function clearAssetDragState() {
-  state.dragAssetId = null;
+  state.mediaState.dragAssetId = null;
+  if (!els.assetList) return;
+
   els.assetList
     .querySelectorAll('.is-dragging, .is-drop-before, .is-drop-after')
     .forEach((node) => node.classList.remove('is-dragging', 'is-drop-before', 'is-drop-after'));
 }
 
 function patchActiveAssetSortOrders(sortMap) {
-  if (!state.activeProject || !sortMap || sortMap.size === 0) return;
+  const activeProject = getActiveProject();
+  if (!activeProject || !sortMap || sortMap.size === 0) return;
 
-  state.activeProject = {
-    ...state.activeProject,
-    assets: state.activeProject.assets.map((asset) =>
+  state.editorState.activeProject = {
+    ...activeProject,
+    assets: activeProject.assets.map((asset) =>
       sortMap.has(asset.id)
         ? {
             ...asset,
@@ -1373,9 +1720,11 @@ function getRebalancedAssetOrder(sortedAssets) {
 }
 
 async function reorderAssetByDrop(assetId, targetIndex) {
-  if (!state.activeProject) return;
+  const activeProject = getActiveProject();
+  if (!activeProject) return;
+  const isPublishedProject = activeProject.status === 'published';
 
-  const sorted = getSortedAssets(state.activeProject.assets || []);
+  const sorted = getSortedAssets(activeProject.assets || []);
   const moving = sorted.find((asset) => asset.id === assetId);
   if (!moving) return;
 
@@ -1410,17 +1759,22 @@ async function reorderAssetByDrop(assetId, targetIndex) {
   try {
     await persistAssetSortUpdates(updates);
     patchActiveAssetSortOrders(new Map(updates.map((item) => [item.id, item.sortOrder])));
-    renderAssetEditors(state.activeProject.assets || []);
+    if (isPublishedProject) {
+      markLiveChangesPending();
+    }
+    renderAssetEditors(state.editorState.activeProject?.assets || []);
     setFeedback('success', 'Asset order updated.');
   } catch (error) {
     setFeedback('error', error.message);
-    await selectProject(state.activeId);
+    if (state.editorState.activeId) {
+      await openProject(state.editorState.activeId, { switchToEditOnMobile: false });
+    }
   }
 }
 
 function resolveAssetDropTargetIndex(overItem, pointerY) {
-  const ordered = getSortedAssets(state.activeProject?.assets || []);
-  const sourceIndex = ordered.findIndex((asset) => asset.id === state.dragAssetId);
+  const ordered = getSortedAssets(state.editorState.activeProject?.assets || []);
+  const sourceIndex = ordered.findIndex((asset) => asset.id === state.mediaState.dragAssetId);
   if (sourceIndex === -1) return { ordered, targetIndex: -1 };
 
   if (!overItem) {
@@ -1443,20 +1797,25 @@ function resolveAssetDropTargetIndex(overItem, pointerY) {
 }
 
 function renderAssetEditors(assets) {
+  if (!els.assetList) return;
+
   els.assetList.innerHTML = '';
 
   if (!assets || assets.length === 0) {
-    state.selectedAssetId = null;
-    state.assetDrafts = new Map();
+    state.mediaState.selectedAssetId = null;
+    state.mediaState.assetDrafts = new Map();
     els.assetList.innerHTML = '<p class="notice">No assets uploaded yet.</p>';
     return;
   }
 
   const sortedAssets = getSortedAssets(assets);
-  const hasSelected = state.selectedAssetId && sortedAssets.some((asset) => asset.id === state.selectedAssetId);
-  state.selectedAssetId = hasSelected ? state.selectedAssetId : sortedAssets[0].id;
+  const hasSelected =
+    state.mediaState.selectedAssetId &&
+    sortedAssets.some((asset) => asset.id === state.mediaState.selectedAssetId);
 
-  const selectedAsset = sortedAssets.find((asset) => asset.id === state.selectedAssetId);
+  state.mediaState.selectedAssetId = hasSelected ? state.mediaState.selectedAssetId : sortedAssets[0].id;
+
+  const selectedAsset = sortedAssets.find((asset) => asset.id === state.mediaState.selectedAssetId);
   if (!selectedAsset) {
     els.assetList.innerHTML = '<p class="notice">Select an asset to edit metadata.</p>';
     return;
@@ -1471,7 +1830,7 @@ function renderAssetEditors(assets) {
       <ul class="admin-v2-asset-sort-list" aria-label="Asset order">
         ${sortedAssets
           .map((asset) => {
-            const active = asset.id === state.selectedAssetId ? 'active' : '';
+            const active = asset.id === state.mediaState.selectedAssetId ? 'active' : '';
             const isCover = asset.id === leadAssetId;
             return `
               <li class="admin-v2-asset-sort-item ${active}" data-asset-id="${escapeHtml(asset.id)}" draggable="true">
@@ -1547,7 +1906,7 @@ function markAssetCardDirty(card) {
 
   const assetId = card.dataset.assetId;
   const draft = readAssetCardPayload(card);
-  state.assetDrafts.set(assetId, draft);
+  state.mediaState.assetDrafts.set(assetId, draft);
   card.classList.add('is-dirty');
 }
 
@@ -1567,8 +1926,12 @@ async function saveAssetCard(card, options = {}) {
     body: JSON.stringify(payload)
   });
 
+  if (getActiveProject()?.status === 'published') {
+    markLiveChangesPending();
+  }
+
   card.classList.remove('is-dirty');
-  state.assetDrafts.delete(assetId);
+  state.mediaState.assetDrafts.delete(assetId);
 
   if (!silent) {
     setFeedback('success', setCover ? 'Cover updated.' : 'Asset saved.');
@@ -1576,11 +1939,12 @@ async function saveAssetCard(card, options = {}) {
 }
 
 async function deleteAssetCard(card) {
-  if (!card || !card.dataset.assetId || !state.activeId) return;
+  if (!card || !card.dataset.assetId || !state.editorState.activeId) return;
 
   const assetId = card.dataset.assetId;
   const confirmed = window.confirm('Delete this asset? This cannot be undone.');
   if (!confirmed) return;
+  const isPublishedProject = getActiveProject()?.status === 'published';
 
   clearFeedback();
 
@@ -1595,435 +1959,438 @@ async function deleteAssetCard(card) {
     setFeedback('success', 'Asset deleted.');
   }
 
-  await selectProject(state.activeId);
-}
-
-function renderPreflightDialog(data) {
-  renderChecklist(
-    els.modalHardList,
-    data.currentHardMissing,
-    'Current project has no blockers and is ready for publish.'
-  );
-
-  const globalItems = data.globalBlockedProjects.map((entry) => `${entry.title}: ${entry.hardMissing.join(' ')}`);
-  renderChecklist(els.modalGlobalList, globalItems, 'No blocking issues found in currently published projects.');
-
-  if (data.canProceed) {
-    els.preflightDialogIntro.textContent = 'Preflight passed. Publishing will update snapshot and trigger deploy hook if configured.';
-  } else {
-    els.preflightDialogIntro.textContent = 'Fix blockers below before publishing.';
+  if (isPublishedProject) {
+    markLiveChangesPending();
   }
 
-  els.preflightConfirmBtn.disabled = !data.canProceed;
+  await openProject(state.editorState.activeId, { switchToEditOnMobile: false });
 }
 
-function openPreflightDialog() {
-  if (typeof els.preflightDialog.showModal === 'function') {
-    if (!els.preflightDialog.open) {
-      els.preflightDialog.showModal();
-    }
-    return;
-  }
+function getDraftPreviewProject() {
+  const activeProject = getActiveProject();
+  if (!activeProject) return null;
 
-  els.preflightDialog.setAttribute('open', '');
+  const payload = projectPayloadFromForm();
+  const assets = [...(activeProject.assets || [])]
+    .map((asset) => ({
+      ...asset,
+      ...(state.mediaState.assetDrafts.get(asset.id) || {})
+    }))
+    .sort((a, b) => Number(a.sortOrder || 0) - Number(b.sortOrder || 0));
+
+  return {
+    ...activeProject,
+    ...payload,
+    assets
+  };
 }
 
-function closePreflightDialog() {
-  if (typeof els.preflightDialog.close === 'function') {
-    if (els.preflightDialog.open) {
-      els.preflightDialog.close();
-    }
-    return;
+function getPreviewCoverAsset(project) {
+  const byId = project.coverAssetId
+    ? project.assets.find((asset) => asset.id === project.coverAssetId)
+    : null;
+
+  if (byId) return byId;
+  return project.assets.find((asset) => asset.featured) || project.assets[0] || null;
+}
+
+function buildProjectPreviewMarkup(project) {
+  const cover = getPreviewCoverAsset(project);
+  const imageAssets = (project.assets || []).filter((asset) => asset.kind === 'image');
+  const modelAsset = (project.assets || []).find((asset) => asset.kind === 'model3d');
+  const posterAsset = (project.assets || []).find((asset) => asset.kind === 'poster') || cover;
+  const moodboard = imageAssets.filter((asset) => !cover || asset.id !== cover.id);
+  const templateClass = `template-${project.styleTemplate || 'editorial'}`;
+  const description = project.descriptionLong || project.descriptionShort || 'No description yet.';
+
+  const tagsMarkup = (project.tags || [])
+    .map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`)
+    .join('');
+
+  const yearMarkup = project.year ? `<span class="tag">${escapeHtml(project.year)}</span>` : '';
+  const disciplineLabel = project.discipline === '3d' ? '3D Project' : 'Graphic Project';
+
+  let mediaMarkup = '<div style="height:100%;display:grid;place-items:center;min-height:420px;">No media published yet.</div>';
+  if (project.discipline === '3d' && modelAsset) {
+    const posterAttr = posterAsset ? ` poster="${escapeHtml(posterAsset.url)}"` : '';
+    mediaMarkup = `
+      <model-viewer
+        src="${escapeHtml(modelAsset.url)}"
+        ${posterAttr}
+        alt="${escapeHtml(modelAsset.altText || project.title)}"
+        camera-controls
+        auto-rotate
+        shadow-intensity="1"
+        interaction-prompt="auto"
+        style="width:100%;height:100%;min-height:420px;background:#111"
+      ></model-viewer>
+    `;
+  } else if (cover) {
+    mediaMarkup = `<img src="${escapeHtml(cover.url)}" alt="${escapeHtml(cover.altText || project.title)}" />`;
   }
 
-  els.preflightDialog.removeAttribute('open');
+  const paletteMarkup = (project.palette || [])
+    .map((token) => sanitizeSwatchColor(token))
+    .filter(Boolean)
+    .map((color) => `<span class="swatch" style="background:${escapeHtml(color)}" title="${escapeHtml(color)}"></span>`)
+    .join('');
+
+  const moodboardMarkup =
+    moodboard.length > 0
+      ? `
+      <section>
+        <h2 style="font-family:var(--font-display);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;margin:1.2rem 0 0.7rem;">
+          Moodboard / Supporting Frames
+        </h2>
+        <div class="moodboard">
+          ${moodboard
+            .map(
+              (asset) => `
+            <figure>
+              <img src="${escapeHtml(asset.url)}" alt="${escapeHtml(asset.altText || `${project.title} supporting visual`)}" loading="lazy" />
+              ${asset.caption ? `<figcaption>${escapeHtml(asset.caption)}</figcaption>` : ''}
+            </figure>
+          `
+            )
+            .join('')}
+        </div>
+      </section>
+    `
+      : '';
+
+  return `
+    <main class="project-shell ${escapeHtml(templateClass)}">
+      <header class="site-header">
+        <h1 class="brand"><a href="/" style="text-decoration:none;">Raymondo</a></h1>
+        <nav class="site-nav">
+          <a href="/">Back to Work</a>
+          <a href="mailto:hello@raymondo.design">Contact</a>
+        </nav>
+      </header>
+
+      <section class="project-hero">
+        <p class="tag-row">
+          <span class="tag">${disciplineLabel}</span>
+          ${yearMarkup}
+          ${tagsMarkup}
+        </p>
+        <h1>${escapeHtml(project.title || 'Untitled Project')}</h1>
+        <p>${escapeHtml(description)}</p>
+      </section>
+
+      <section class="project-layout">
+        <article class="project-main">
+          <div class="media-stage">
+            ${mediaMarkup}
+          </div>
+        </article>
+
+        <aside class="project-panel">
+          <div class="panel-block">
+            <h3>Inspiration & Theme</h3>
+            <p>${escapeHtml(project.themeInspiration || 'Add inspiration details in admin to enrich this section.')}</p>
+          </div>
+
+          <div class="panel-block">
+            <h3>Design DNA</h3>
+            <p>${escapeHtml(project.styleDirection || 'No style direction notes yet.')}</p>
+          </div>
+
+          <div class="panel-block">
+            <h3>Typography Notes</h3>
+            <p>${escapeHtml(project.typographyNotes || 'No typography notes yet.')}</p>
+          </div>
+
+          <div class="panel-block">
+            <h3>Motif Summary</h3>
+            <p>${escapeHtml(project.motifSummary || 'No motif notes yet.')}</p>
+          </div>
+
+          ${
+            project.discipline === '3d'
+              ? `
+            <div class="panel-block">
+              <h3>Tooling</h3>
+              <p>${escapeHtml(project.toolingNotes || 'No tooling details yet.')}</p>
+            </div>
+            <div class="panel-block">
+              <h3>Material Notes</h3>
+              <p>${escapeHtml(project.materialNotes || 'No material notes yet.')}</p>
+            </div>
+          `
+              : ''
+          }
+
+          <div class="panel-block">
+            <h3>Palette</h3>
+            <div class="palette">
+              ${paletteMarkup || '<p>No palette colors set.</p>'}
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      ${moodboardMarkup}
+    </main>
+  `;
 }
 
 function openPreviewDialog() {
+  if (!els.previewDialog) return;
   if (typeof els.previewDialog.showModal === 'function') {
-    if (!els.previewDialog.open) {
-      els.previewDialog.showModal();
-    }
-    return;
+    if (!els.previewDialog.open) els.previewDialog.showModal();
+  } else {
+    els.previewDialog.setAttribute('open', '');
   }
-
-  els.previewDialog.setAttribute('open', '');
 }
 
 function closePreviewDialog() {
+  if (!els.previewDialog) return;
   if (typeof els.previewDialog.close === 'function') {
-    if (els.previewDialog.open) {
-      els.previewDialog.close();
-    }
-    return;
+    if (els.previewDialog.open) els.previewDialog.close();
+  } else {
+    els.previewDialog.removeAttribute('open');
   }
-
-  els.previewDialog.removeAttribute('open');
 }
 
 function renderDraftPreview() {
   const project = getDraftPreviewProject();
   if (!project) {
-    setFeedback('error', 'Select a project first.');
+    setFeedback('error', 'Select a post first.');
     return;
   }
 
-  els.previewDialogIntro.textContent = `Previewing draft using template: ${project.styleTemplate || 'editorial'}.`;
-  els.previewDialogContent.innerHTML = buildProjectPreviewMarkup(project);
+  if (els.previewDialogIntro) {
+    els.previewDialogIntro.textContent = 'Using the same project page layout with current editor values.';
+  }
 
-  if (project.slug) {
-    els.previewOpenRouteBtn.href = `/projects/${encodeURIComponent(project.slug)}/`;
-    els.previewOpenRouteBtn.classList.remove('is-disabled');
-    els.previewOpenRouteBtn.removeAttribute('aria-disabled');
-  } else {
-    els.previewOpenRouteBtn.href = '#';
-    els.previewOpenRouteBtn.classList.add('is-disabled');
-    els.previewOpenRouteBtn.setAttribute('aria-disabled', 'true');
+  if (els.previewDialogContent) {
+    els.previewDialogContent.innerHTML = buildProjectPreviewMarkup(project);
+  }
+
+  if (els.previewOpenRouteBtn) {
+    if (project.slug) {
+      els.previewOpenRouteBtn.href = `/projects/${encodeURIComponent(project.slug)}/`;
+      els.previewOpenRouteBtn.classList.remove('is-disabled');
+      els.previewOpenRouteBtn.removeAttribute('aria-disabled');
+    } else {
+      els.previewOpenRouteBtn.href = '#';
+      els.previewOpenRouteBtn.classList.add('is-disabled');
+      els.previewOpenRouteBtn.setAttribute('aria-disabled', 'true');
+    }
   }
 
   openPreviewDialog();
 }
 
-async function runPreflight(options = {}) {
-  const { openModal = true } = options;
+function setMobileTab(nextTab) {
+  const next = ['posts', 'edit', 'media'].includes(nextTab) ? nextTab : 'posts';
+  state.uiState.mobileTab = next;
 
-  if (!state.activeProject || !state.activeId) {
-    setFeedback('error', 'Select a project first.');
-    return null;
+  if (els.root) {
+    els.root.dataset.mobileTab = next;
   }
 
-  clearFeedback();
+  if (els.mobileTabBar) {
+    els.mobileTabBar.querySelectorAll('[data-mobile-tab]').forEach((button) => {
+      button.setAttribute('aria-pressed', button.dataset.mobileTab === next ? 'true' : 'false');
+    });
+  }
+}
 
-  if (state.hasDirtyChanges) {
-    await saveProject({ autosave: false, silent: true });
+function handlePostListAction(action, projectId) {
+  if (!action || !projectId) return Promise.resolve();
+
+  if (action === 'open-post') {
+    return openProject(projectId);
   }
 
-  await selectProject(state.activeId);
+  if (action === 'delete') {
+    return deleteDraftPost(projectId);
+  }
 
-  const payload = await api('/api/admin/publish', {
-    method: 'POST',
-    body: JSON.stringify({ dryRun: true })
+  if (action === 'move-up') {
+    return movePostByStep(projectId, -1);
+  }
+
+  if (action === 'move-down') {
+    return movePostByStep(projectId, 1);
+  }
+
+  return Promise.resolve();
+}
+
+function wirePostList(listEl) {
+  if (!listEl) return;
+
+  listEl.addEventListener('click', (event) => {
+    const trigger = event.target.closest('[data-action][data-project-id]');
+    if (!trigger) return;
+
+    const action = trigger.dataset.action;
+    const projectId = trigger.dataset.projectId;
+
+    handlePostListAction(action, projectId).catch((error) => {
+      setFeedback('error', error.message);
+    });
   });
 
-  const currentHardMissing = state.activeProject?.readiness?.hardMissing || [];
-  const globalBlockedProjects = (payload.readiness || []).filter((entry) => !entry.canPublish);
+  listEl.addEventListener('dragstart', (event) => {
+    if (!canReorderPosts()) return;
 
-  const data = {
-    currentHardMissing,
-    globalBlockedProjects,
-    canProceed: currentHardMissing.length === 0 && globalBlockedProjects.length === 0
-  };
+    const item = event.target.closest('li[data-project-id][data-project-status]');
+    if (!item) return;
 
-  state.lastPreflight = data;
+    state.postsState.dragProjectId = item.dataset.projectId || null;
+    state.postsState.dragProjectStatus = item.dataset.projectStatus || null;
 
-  if (data.canProceed) {
-    els.preflightSummary.textContent = 'Preflight passed. Safe to publish.';
-  } else {
-    els.preflightSummary.textContent = `Preflight found ${currentHardMissing.length + globalBlockedProjects.length} blocking item(s).`;
-  }
-
-  if (openModal) {
-    renderPreflightDialog(data);
-    openPreflightDialog();
-  }
-
-  return data;
-}
-
-async function publishSnapshot() {
-  if (!state.activeProject || !state.activeId) {
-    setFeedback('error', 'Select a project first.');
-    return;
-  }
-
-  let preflight = state.lastPreflight;
-  if (!preflight) {
-    preflight = await runPreflight({ openModal: false });
-  }
-
-  if (!preflight || !preflight.canProceed) {
-    setFeedback('error', 'Cannot publish until preflight blockers are resolved.');
-    return;
-  }
-
-  clearFeedback();
-
-  els.publishBtn.disabled = true;
-  els.publishBtn.textContent = 'Publishing...';
-  els.mobilePublishBtn.disabled = true;
-  els.preflightConfirmBtn.disabled = true;
-
-  try {
-    if (state.activeProject.status !== 'published') {
-      await saveProject({ autosave: false, statusOverride: 'published', silent: true });
+    item.classList.add('is-dragging');
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', state.postsState.dragProjectId || '');
     }
-
-    const payload = await api('/api/admin/publish', {
-      method: 'POST',
-      body: JSON.stringify({})
-    });
-
-    const warnings = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' | ')}` : '';
-    setFeedback('success', `Published ${payload.projectCount} project(s). Snapshot: ${payload.snapshotKey}.${warnings}`);
-
-    await loadProjects();
-    if (state.activeId) {
-      await selectProject(state.activeId);
-    }
-
-    state.lastPreflight = null;
-    closePreflightDialog();
-  } catch (error) {
-    setFeedback('error', error.message);
-  } finally {
-    els.publishBtn.disabled = false;
-    els.publishBtn.textContent = 'Publish Snapshot';
-    els.mobilePublishBtn.disabled = false;
-  }
-}
-
-async function publishSelectedDraftProjects() {
-  let selectedDrafts = getSelectedDraftProjects();
-  if (selectedDrafts.length === 0) {
-    setFeedback('error', 'Select at least one draft project to publish.');
-    return;
-  }
-
-  clearFeedback();
-
-  if (state.hasDirtyChanges && state.activeId && state.selectedProjectIds.has(state.activeId)) {
-    await saveProject({ autosave: false, silent: true });
-    await selectProject(state.activeId);
-    selectedDrafts = getSelectedDraftProjects();
-  }
-
-  const blockedSelected = selectedDrafts.filter((project) => !project.readiness?.canPublish);
-  if (blockedSelected.length > 0) {
-    const names = blockedSelected.map((project) => project.title || project.slug || project.id).join(', ');
-    setFeedback('error', `Selected drafts have publish blockers: ${names}`);
-    return;
-  }
-
-  const dryRun = await api('/api/admin/publish', {
-    method: 'POST',
-    body: JSON.stringify({ dryRun: true })
   });
-  const existingBlocked = (dryRun.readiness || []).filter((entry) => !entry.canPublish);
-  if (existingBlocked.length > 0) {
-    setFeedback('error', 'Cannot bulk publish while existing published projects have blockers.');
-    return;
-  }
 
-  const originalBulkLabel = els.bulkPublishBtn.textContent;
-  els.bulkPublishBtn.disabled = true;
-  els.bulkPublishBtn.textContent = 'Publishing...';
-  els.publishBtn.disabled = true;
-  els.mobilePublishBtn.disabled = true;
+  listEl.addEventListener('dragover', (event) => {
+    if (!canReorderPosts()) return;
+    if (!state.postsState.dragProjectId || !state.postsState.dragProjectStatus) return;
 
-  try {
-    for (const project of selectedDrafts) {
-      await api('/api/admin/projects', {
-        method: 'POST',
-        body: JSON.stringify({
-          id: project.id,
-          status: 'published',
-          autosave: true
-        })
-      });
-    }
+    const overItem = event.target.closest('li[data-project-id][data-project-status]');
+    if (!overItem) return;
 
-    const payload = await api('/api/admin/publish', {
-      method: 'POST',
-      body: JSON.stringify({})
-    });
+    if (overItem.dataset.projectStatus !== state.postsState.dragProjectStatus) return;
+    if (overItem.dataset.projectId === state.postsState.dragProjectId) return;
 
-    const warnings = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' | ')}` : '';
-    setFeedback(
-      'success',
-      `Published ${selectedDrafts.length} selected draft(s). Snapshot: ${payload.snapshotKey}.${warnings}`
-    );
-
-    state.selectedProjectIds.clear();
-    await loadProjects();
-    if (state.activeId) {
-      await selectProject(state.activeId);
-    }
-  } catch (error) {
-    setFeedback('error', error.message);
-  } finally {
-    els.bulkPublishBtn.textContent = originalBulkLabel;
-    els.publishBtn.disabled = false;
-    els.mobilePublishBtn.disabled = false;
-    syncBulkPublishButton();
-  }
-}
-
-async function unpublishActiveProject() {
-  if (!state.activeProject || !state.activeId) {
-    setFeedback('error', 'Select a project first.');
-    return;
-  }
-
-  if (state.activeProject.status !== 'published') {
-    setFeedback('error', 'Only published projects can be unpublished.');
-    return;
-  }
-
-  const confirmed = window.confirm(
-    `Unpublish "${state.activeProject.title}" and republish the snapshot without it?`
-  );
-
-  if (!confirmed) return;
-
-  clearFeedback();
-
-  try {
-    await saveProject({ autosave: false, statusOverride: 'draft', silent: true });
-
-    const payload = await api('/api/admin/publish', {
-      method: 'POST',
-      body: JSON.stringify({})
-    });
-
-    const warnings = payload.warnings?.length ? ` Warnings: ${payload.warnings.join(' | ')}` : '';
-    setFeedback('success', `Project moved to draft and snapshot republished.${warnings}`);
-
-    await loadProjects();
-    if (state.activeId) {
-      await selectProject(state.activeId);
-    }
-
-    state.lastPreflight = null;
-  } catch (error) {
-    setFeedback('error', error.message);
-  }
-}
-
-function handleProjectInput(event) {
-  const target = event.target;
-  if (!target || !('name' in target) || !target.name) return;
-  if (target.closest('.admin-v2-asset-card')) return;
-
-  markDirty();
-
-  if (['discipline', 'palette'].includes(target.name)) {
-    syncThreeDFields();
-    renderPalettePreview();
-  }
-
-  scheduleAutosave();
-}
-
-function handleProjectBlur(event) {
-  const target = event.target;
-  if (!target || !('name' in target) || !target.name) return;
-  if (target.closest('.admin-v2-asset-card')) return;
-
-  markDirty();
-  scheduleAutosave(0);
-}
-
-function handleProjectFilterClick(event) {
-  const button = event.target.closest('button[data-filter]');
-  if (!button) return;
-
-  state.projectFilter = button.dataset.filter || 'all';
-  updateFilterButtons();
-  renderProjectList();
-}
-
-function handleProjectDragStart(event) {
-  if (!canDragSortProjects()) return;
-  if (event.target.closest('.admin-v2-project-select-wrap')) return;
-  const item = event.target.closest('li[data-project-id]');
-  if (!item) return;
-
-  state.dragProjectId = item.dataset.projectId || null;
-  if (!state.dragProjectId) return;
-
-  item.classList.add('is-dragging');
-  if (event.dataTransfer) {
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/plain', state.dragProjectId);
-  }
-}
-
-function handleProjectDragOver(event) {
-  if (!state.dragProjectId || !canDragSortProjects()) return;
-
-  const overItem = event.target.closest('li[data-project-id]');
-  event.preventDefault();
-  if (event.dataTransfer) {
-    event.dataTransfer.dropEffect = 'move';
-  }
-
-  if (!overItem) return;
-  if (overItem.dataset.projectId === state.dragProjectId) return;
-
-  els.projectList
-    .querySelectorAll('.is-drop-before, .is-drop-after')
-    .forEach((node) => node.classList.remove('is-drop-before', 'is-drop-after'));
-
-  const rect = overItem.getBoundingClientRect();
-  const isAfter = event.clientY >= rect.top + rect.height / 2;
-  overItem.classList.add(isAfter ? 'is-drop-after' : 'is-drop-before');
-}
-
-function handleProjectDrop(event) {
-  if (!state.dragProjectId || !canDragSortProjects()) return;
-  event.preventDefault();
-
-  const draggedId = state.dragProjectId;
-  const overItem = event.target.closest('li[data-project-id]');
-  const { ordered, targetIndex } = resolveDropTargetIndex(overItem, event.clientY);
-  const sourceIndex = ordered.findIndex((project) => project.id === draggedId);
-
-  clearProjectListDragState();
-
-  if (targetIndex < 0 || sourceIndex < 0 || targetIndex === sourceIndex) {
-    return;
-  }
-
-  reorderProjectByDrop(draggedId, targetIndex).catch((error) => {
-    setFeedback('error', error.message);
-  });
-}
-
-function handleProjectDragEnd() {
-  clearProjectListDragState();
-}
-
-function filesFromDrop(event) {
-  event.preventDefault();
-  els.dropzone.classList.remove('dragging');
-  return Array.from(event.dataTransfer?.files || []);
-}
-
-function wireDropzone() {
-  const dz = els.dropzone;
-
-  dz.addEventListener('dragover', (event) => {
     event.preventDefault();
-    dz.classList.add('dragging');
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+
+    listEl
+      .querySelectorAll('.is-drop-before, .is-drop-after')
+      .forEach((node) => node.classList.remove('is-drop-before', 'is-drop-after'));
+
+    const rect = overItem.getBoundingClientRect();
+    const isAfter = event.clientY >= rect.top + rect.height / 2;
+    overItem.classList.add(isAfter ? 'is-drop-after' : 'is-drop-before');
   });
 
-  dz.addEventListener('dragleave', () => {
-    dz.classList.remove('dragging');
+  listEl.addEventListener('drop', (event) => {
+    if (!canReorderPosts()) return;
+    if (!state.postsState.dragProjectId || !state.postsState.dragProjectStatus) return;
+
+    event.preventDefault();
+    const overItem = event.target.closest('li[data-project-id][data-project-status]');
+    if (!overItem) return;
+
+    if (overItem.dataset.projectStatus !== state.postsState.dragProjectStatus) {
+      clearPostDragState();
+      return;
+    }
+
+    handlePostDrop(
+      state.postsState.dragProjectStatus,
+      state.postsState.dragProjectId,
+      overItem.dataset.projectId || '',
+      event.clientY
+    )
+      .catch((error) => setFeedback('error', error.message))
+      .finally(() => clearPostDragState());
   });
 
-  dz.addEventListener('drop', (event) => {
-    const files = filesFromDrop(event);
-    enqueueUploads(files).catch((error) => setFeedback('error', error.message));
+  listEl.addEventListener('dragend', () => {
+    clearPostDragState();
   });
 
-  els.fileInput.addEventListener('change', () => {
-    const files = Array.from(els.fileInput.files || []);
-    enqueueUploads(files).catch((error) => setFeedback('error', error.message));
-    els.fileInput.value = '';
+  listEl.addEventListener('keydown', (event) => {
+    if (!canReorderPosts()) return;
+
+    const item = event.target.closest('li[data-project-id]');
+    if (!item) return;
+
+    const projectId = item.dataset.projectId;
+    if (!projectId) return;
+
+    const isMoveUp = event.altKey && event.key === 'ArrowUp';
+    const isMoveDown = event.altKey && event.key === 'ArrowDown';
+
+    if (!isMoveUp && !isMoveDown) return;
+
+    event.preventDefault();
+    movePostByStep(projectId, isMoveUp ? -1 : 1).catch((error) => {
+      setFeedback('error', error.message);
+    });
   });
+}
+
+function wireTagPaletteEditors() {
+  if (els.tagAddBtn) {
+    els.tagAddBtn.addEventListener('click', () => consumeTagInput());
+  }
+
+  if (els.tagEditorInput) {
+    els.tagEditorInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ',') {
+        event.preventDefault();
+        consumeTagInput();
+      }
+    });
+
+    els.tagEditorInput.addEventListener('blur', () => {
+      consumeTagInput();
+    });
+  }
+
+  if (els.tagChipList) {
+    els.tagChipList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-tag]');
+      if (!button) return;
+
+      const removing = String(button.dataset.removeTag || '');
+      const next = getTagsFromField().filter((tag) => tag.toLowerCase() !== removing.toLowerCase());
+      setTagsToField(next, { mark: true });
+    });
+  }
+
+  if (els.paletteApplyBtn) {
+    els.paletteApplyBtn.addEventListener('click', () => {
+      applyPaletteTextInput();
+    });
+  }
+
+  if (els.paletteTextInput) {
+    els.paletteTextInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        applyPaletteTextInput();
+      }
+    });
+
+    els.paletteTextInput.addEventListener('blur', () => {
+      if (!els.paletteTextInput.value.trim()) return;
+      applyPaletteTextInput();
+    });
+  }
+
+  if (els.paletteAddColorBtn) {
+    els.paletteAddColorBtn.addEventListener('click', () => {
+      addPaletteColorFromPicker();
+    });
+  }
+
+  if (els.paletteChipList) {
+    els.paletteChipList.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-remove-color]');
+      if (!button) return;
+
+      const removing = String(button.dataset.removeColor || '');
+      const next = getPaletteFromField().filter((color) => color !== removing);
+      setPaletteToField(next, { mark: true });
+    });
+  }
 }
 
 function wireAssetEvents() {
+  if (!els.assetList) return;
+
   els.assetList.addEventListener('input', (event) => {
     const card = event.target.closest('.admin-v2-asset-detail');
     if (!card) return;
@@ -2040,18 +2407,18 @@ function wireAssetEvents() {
     const item = event.target.closest('.admin-v2-asset-sort-item');
     if (!item) return;
 
-    state.dragAssetId = item.dataset.assetId || null;
-    if (!state.dragAssetId) return;
+    state.mediaState.dragAssetId = item.dataset.assetId || null;
+    if (!state.mediaState.dragAssetId) return;
 
     item.classList.add('is-dragging');
     if (event.dataTransfer) {
       event.dataTransfer.effectAllowed = 'move';
-      event.dataTransfer.setData('text/plain', state.dragAssetId);
+      event.dataTransfer.setData('text/plain', state.mediaState.dragAssetId);
     }
   });
 
   els.assetList.addEventListener('dragover', (event) => {
-    if (!state.dragAssetId) return;
+    if (!state.mediaState.dragAssetId) return;
 
     const overItem = event.target.closest('.admin-v2-asset-sort-item');
     event.preventDefault();
@@ -2060,7 +2427,7 @@ function wireAssetEvents() {
     }
 
     if (!overItem) return;
-    if (overItem.dataset.assetId === state.dragAssetId) return;
+    if (overItem.dataset.assetId === state.mediaState.dragAssetId) return;
 
     els.assetList
       .querySelectorAll('.is-drop-before, .is-drop-after')
@@ -2072,10 +2439,10 @@ function wireAssetEvents() {
   });
 
   els.assetList.addEventListener('drop', (event) => {
-    if (!state.dragAssetId) return;
+    if (!state.mediaState.dragAssetId) return;
     event.preventDefault();
 
-    const draggedId = state.dragAssetId;
+    const draggedId = state.mediaState.dragAssetId;
     const overItem = event.target.closest('.admin-v2-asset-sort-item');
     const { ordered, targetIndex } = resolveAssetDropTargetIndex(overItem, event.clientY);
     const sourceIndex = ordered.findIndex((asset) => asset.id === draggedId);
@@ -2093,8 +2460,8 @@ function wireAssetEvents() {
   els.assetList.addEventListener('click', (event) => {
     const selectBtn = event.target.closest('[data-asset-select]');
     if (selectBtn) {
-      state.selectedAssetId = selectBtn.dataset.assetSelect || null;
-      renderAssetEditors(state.activeProject?.assets || []);
+      state.mediaState.selectedAssetId = selectBtn.dataset.assetSelect || null;
+      renderAssetEditors(state.editorState.activeProject?.assets || []);
       return;
     }
 
@@ -2106,7 +2473,7 @@ function wireAssetEvents() {
 
     if (actionBtn.dataset.action === 'save-asset') {
       saveAssetCard(card)
-        .then(() => selectProject(state.activeId))
+        .then(() => openProject(state.editorState.activeId, { switchToEditOnMobile: false }))
         .catch((error) => setFeedback('error', error.message));
       return;
     }
@@ -2117,9 +2484,9 @@ function wireAssetEvents() {
         .then(async () => {
           if (assetId) {
             await reorderAssetByDrop(assetId, 0);
-            state.selectedAssetId = assetId;
+            state.mediaState.selectedAssetId = assetId;
           }
-          await selectProject(state.activeId);
+          await openProject(state.editorState.activeId, { switchToEditOnMobile: false });
           setFeedback('success', 'Cover updated.');
         })
         .catch((error) => setFeedback('error', error.message));
@@ -2132,6 +2499,80 @@ function wireAssetEvents() {
   });
 }
 
+function wireDropzone() {
+  if (!els.dropzone || !els.fileInput) return;
+
+  els.dropzone.addEventListener('dragover', (event) => {
+    event.preventDefault();
+    els.dropzone.classList.add('dragging');
+  });
+
+  els.dropzone.addEventListener('dragleave', () => {
+    els.dropzone.classList.remove('dragging');
+  });
+
+  els.dropzone.addEventListener('drop', (event) => {
+    event.preventDefault();
+    els.dropzone.classList.remove('dragging');
+    const files = Array.from(event.dataTransfer?.files || []);
+    enqueueUploads(files).catch((error) => setFeedback('error', error.message));
+  });
+
+  els.fileInput.addEventListener('change', () => {
+    const files = Array.from(els.fileInput.files || []);
+    enqueueUploads(files).catch((error) => setFeedback('error', error.message));
+    els.fileInput.value = '';
+  });
+}
+
+function wireDialogEvents() {
+  if (els.blockerCloseBtn) {
+    els.blockerCloseBtn.addEventListener('click', () => closeBlockerDialog());
+  }
+
+  if (els.blockerDialog) {
+    els.blockerDialog.addEventListener('click', (event) => {
+      const rect = els.blockerDialog.getBoundingClientRect();
+      const inDialog =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+
+      if (!inDialog) {
+        closeBlockerDialog();
+      }
+    });
+  }
+
+  if (els.previewCloseBtn) {
+    els.previewCloseBtn.addEventListener('click', () => closePreviewDialog());
+  }
+
+  if (els.previewOpenRouteBtn) {
+    els.previewOpenRouteBtn.addEventListener('click', (event) => {
+      if (els.previewOpenRouteBtn.classList.contains('is-disabled')) {
+        event.preventDefault();
+      }
+    });
+  }
+
+  if (els.previewDialog) {
+    els.previewDialog.addEventListener('click', (event) => {
+      const rect = els.previewDialog.getBoundingClientRect();
+      const inDialog =
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom;
+
+      if (!inDialog) {
+        closePreviewDialog();
+      }
+    });
+  }
+}
+
 function wireKeyboardShortcuts() {
   document.addEventListener('keydown', (event) => {
     const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's';
@@ -2142,132 +2583,145 @@ function wireKeyboardShortcuts() {
   });
 }
 
-function wireDialogEvents() {
-  els.preflightCancelBtn.addEventListener('click', () => {
-    closePreflightDialog();
-  });
-
-  els.preflightConfirmBtn.addEventListener('click', () => {
-    publishSnapshot().catch((error) => setFeedback('error', error.message));
-  });
-
-  els.preflightDialog.addEventListener('click', (event) => {
-    const rect = els.preflightDialog.getBoundingClientRect();
-    const inDialog =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-
-    if (!inDialog) {
-      closePreflightDialog();
-    }
-  });
-
-  els.previewCloseBtn.addEventListener('click', () => {
-    closePreviewDialog();
-  });
-
-  els.previewOpenRouteBtn.addEventListener('click', (event) => {
-    if (els.previewOpenRouteBtn.classList.contains('is-disabled')) {
-      event.preventDefault();
-    }
-  });
-
-  els.previewDialog.addEventListener('click', (event) => {
-    const rect = els.previewDialog.getBoundingClientRect();
-    const inDialog =
-      event.clientX >= rect.left &&
-      event.clientX <= rect.right &&
-      event.clientY >= rect.top &&
-      event.clientY <= rect.bottom;
-
-    if (!inDialog) {
-      closePreviewDialog();
-    }
-  });
-}
-
 function wireEvents() {
+  if (!els.form) return;
+
+  if (els.mobileTabBar) {
+    els.mobileTabBar.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-mobile-tab]');
+      if (!button) return;
+      setMobileTab(button.dataset.mobileTab || 'posts');
+    });
+  }
+
+  if (els.newPostBtn) {
+    els.newPostBtn.addEventListener('click', () => {
+      createNewPost().catch((error) => setFeedback('error', error.message));
+    });
+  }
+
+  if (els.reorderToggleBtn) {
+    els.reorderToggleBtn.addEventListener('click', () => {
+      const canEnable = state.postsState.scope === 'all' && !state.postsState.search.trim();
+      if (!canEnable) {
+        setFeedback('warn', 'Clear search and set scope to All to reorder posts.');
+        return;
+      }
+
+      state.postsState.reorderMode = !state.postsState.reorderMode;
+      renderPostGroups();
+    });
+  }
+
+  if (els.postSearchInput) {
+    els.postSearchInput.addEventListener('input', (event) => {
+      state.postsState.search = event.target.value || '';
+      if (!state.postsState.search.trim()) {
+        renderPostGroups();
+        return;
+      }
+
+      state.postsState.reorderMode = false;
+      renderPostGroups();
+    });
+  }
+
+  if (els.postScopeBar) {
+    els.postScopeBar.addEventListener('click', (event) => {
+      const button = event.target.closest('[data-scope]');
+      if (!button) return;
+
+      state.postsState.scope = button.dataset.scope || 'all';
+      if (state.postsState.scope !== 'all') {
+        state.postsState.reorderMode = false;
+      }
+      renderPostGroups();
+    });
+  }
+
+  wirePostList(els.draftPostList);
+  wirePostList(els.publishedPostList);
+
   els.form.addEventListener('submit', (event) => {
     event.preventDefault();
     saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
   });
 
-  els.form.addEventListener('input', handleProjectInput);
-  els.form.addEventListener('change', handleProjectInput);
-  els.form.addEventListener('focusout', handleProjectBlur, true);
+  els.form.addEventListener('input', handlePostInput);
+  els.form.addEventListener('change', handlePostInput);
+  els.form.addEventListener('focusout', handlePostBlur, true);
+  wireTagPaletteEditors();
 
-  els.newGraphicBtn.addEventListener('click', () => {
-    createProjectPreset('graphic').catch((error) => setFeedback('error', error.message));
-  });
+  if (els.saveNowBtn) {
+    els.saveNowBtn.addEventListener('click', () => {
+      saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.new3dBtn.addEventListener('click', () => {
-    createProjectPreset('3d').catch((error) => setFeedback('error', error.message));
-  });
+  if (els.previewBtn) {
+    els.previewBtn.addEventListener('click', () => renderDraftPreview());
+  }
 
-  els.bulkPublishBtn.addEventListener('click', () => {
-    publishSelectedDraftProjects().catch((error) => setFeedback('error', error.message));
-  });
+  if (els.republishSiteBtn) {
+    els.republishSiteBtn.addEventListener('click', () => {
+      republishSite().catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.saveNowBtn.addEventListener('click', () => {
-    saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
-  });
+  if (els.publishToggleBtn) {
+    els.publishToggleBtn.addEventListener('click', () => {
+      if (!state.editorState.activeId) return;
+      togglePublishPost(state.editorState.activeId).catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.previewBtn.addEventListener('click', () => {
-    renderDraftPreview();
-  });
+  if (els.deleteBtn) {
+    els.deleteBtn.addEventListener('click', () => {
+      if (!state.editorState.activeId) return;
+      deleteDraftPost(state.editorState.activeId).catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.publishBtn.addEventListener('click', () => {
-    runPreflight({ openModal: true }).catch((error) => setFeedback('error', error.message));
-  });
+  if (els.mobileSaveBtn) {
+    els.mobileSaveBtn.addEventListener('click', () => {
+      saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.unpublishBtn.addEventListener('click', () => {
-    unpublishActiveProject().catch((error) => setFeedback('error', error.message));
-  });
+  if (els.mobilePreviewBtn) {
+    els.mobilePreviewBtn.addEventListener('click', () => renderDraftPreview());
+  }
 
-  els.deleteBtn.addEventListener('click', () => {
-    deleteActiveDraftProject().catch((error) => setFeedback('error', error.message));
-  });
+  if (els.mobileRepublishBtn) {
+    els.mobileRepublishBtn.addEventListener('click', () => {
+      republishSite().catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.projectSearch.addEventListener('input', (event) => {
-    state.projectSearch = event.target.value || '';
-    renderProjectList();
-  });
+  if (els.mobilePublishBtn) {
+    els.mobilePublishBtn.addEventListener('click', () => {
+      if (!state.editorState.activeId) return;
+      togglePublishPost(state.editorState.activeId).catch((error) => setFeedback('error', error.message));
+    });
+  }
 
-  els.filterBar.addEventListener('click', handleProjectFilterClick);
-  els.projectList.addEventListener('dragstart', handleProjectDragStart);
-  els.projectList.addEventListener('dragover', handleProjectDragOver);
-  els.projectList.addEventListener('drop', handleProjectDrop);
-  els.projectList.addEventListener('dragend', handleProjectDragEnd);
-
-  els.mobileSaveBtn.addEventListener('click', () => {
-    saveProject({ autosave: false }).catch((error) => setFeedback('error', error.message));
-  });
-
-  els.mobilePreviewBtn.addEventListener('click', () => {
-    renderDraftPreview();
-  });
-
-  els.mobilePublishBtn.addEventListener('click', () => {
-    runPreflight({ openModal: true }).catch((error) => setFeedback('error', error.message));
-  });
-
-  els.mobileAssetsBtn.addEventListener('click', () => {
-    els.assetsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    els.fileInput.click();
-  });
+  if (els.mobileDeleteBtn) {
+    els.mobileDeleteBtn.addEventListener('click', () => {
+      if (!state.editorState.activeId) return;
+      deleteDraftPost(state.editorState.activeId).catch((error) => setFeedback('error', error.message));
+    });
+  }
 
   wireDropzone();
   wireAssetEvents();
-  wireKeyboardShortcuts();
   wireDialogEvents();
+  wireKeyboardShortcuts();
 }
 
 async function init() {
   try {
     wireEvents();
-    updateFilterButtons();
+    setMobileTab('posts');
     clearEditor();
     await loadProjects();
   } catch (error) {
