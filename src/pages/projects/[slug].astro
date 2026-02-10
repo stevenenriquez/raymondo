@@ -161,7 +161,6 @@ const templateClass = `template-${project.styleTemplate}`;
             <div class="project-lightbox-stage" id="projectLightboxStage" data-lightbox-stage>
               <img id="projectLightboxImage" src="" alt="" draggable="false" />
             </div>
-            <figcaption id="projectLightboxCaption"></figcaption>
             <p id="projectLightboxCounter" class="project-lightbox-counter"></p>
           </figure>
           <button type="button" class="project-lightbox-nav next" data-lightbox-next aria-label="Next image" title="Next">
@@ -190,7 +189,6 @@ const templateClass = `template-${project.styleTemplate}`;
         const lightbox = document.getElementById('projectLightbox');
         const imageEl = document.getElementById('projectLightboxImage');
         const stageEl = document.getElementById('projectLightboxStage');
-        const captionEl = document.getElementById('projectLightboxCaption');
         const counterEl = document.getElementById('projectLightboxCounter');
         const closeBtn = lightbox?.querySelector('[data-lightbox-close]');
         const prevBtn = lightbox?.querySelector('[data-lightbox-prev]');
@@ -200,28 +198,14 @@ const templateClass = `template-${project.styleTemplate}`;
           lightbox instanceof HTMLDialogElement &&
           imageEl &&
           stageEl &&
-          captionEl &&
           counterEl &&
           images.length > 0
         ) {
           let activeIndex = 0;
-          let pointerDown = false;
-          let dragInProgress = false;
-          let dragDeltaX = 0;
-          let startX = 0;
-          let startY = 0;
-          let pointerTravel = 0;
-          const DRAG_THRESHOLD = 72;
 
           const wrapIndex = (index) => {
             const total = images.length;
             return ((index % total) + total) % total;
-          };
-
-          const resetDragVisual = () => {
-            imageEl.style.transform = 'translate3d(0, 0, 0)';
-            imageEl.style.transition = 'transform 170ms ease';
-            stageEl.classList.remove('is-dragging');
           };
 
           const renderSlide = (index) => {
@@ -229,9 +213,7 @@ const templateClass = `template-${project.styleTemplate}`;
             const current = images[activeIndex];
             imageEl.src = current.url || '';
             imageEl.alt = current.alt || '';
-            captionEl.textContent = current.caption || current.alt || '';
             counterEl.textContent = `${activeIndex + 1} / ${images.length}`;
-            resetDragVisual();
           };
 
           const openAt = (index) => {
@@ -244,13 +226,6 @@ const templateClass = `template-${project.styleTemplate}`;
 
           const closeLightbox = () => {
             if (lightbox.open) lightbox.close();
-          };
-
-          const releasePointerState = () => {
-            pointerDown = false;
-            dragInProgress = false;
-            dragDeltaX = 0;
-            resetDragVisual();
           };
 
           document.addEventListener('click', (event) => {
@@ -271,7 +246,6 @@ const templateClass = `template-${project.styleTemplate}`;
 
           lightbox.addEventListener('close', () => {
             document.body.classList.remove('lightbox-open');
-            releasePointerState();
           });
 
           document.addEventListener('keydown', (event) => {
@@ -286,80 +260,6 @@ const templateClass = `template-${project.styleTemplate}`;
               event.preventDefault();
               closeLightbox();
             }
-          });
-
-          stageEl.addEventListener('pointerdown', (event) => {
-            if (!lightbox.open) return;
-            if (event.pointerType === 'mouse' && event.button !== 0) return;
-
-            pointerDown = true;
-            dragInProgress = false;
-            dragDeltaX = 0;
-            startX = event.clientX;
-            startY = event.clientY;
-            pointerTravel = 0;
-            imageEl.style.transition = 'none';
-            stageEl.classList.add('is-dragging');
-            stageEl.setPointerCapture(event.pointerId);
-          });
-
-          stageEl.addEventListener('pointermove', (event) => {
-            if (!pointerDown || !lightbox.open) return;
-
-            const deltaX = event.clientX - startX;
-            const deltaY = event.clientY - startY;
-            pointerTravel = Math.max(pointerTravel, Math.abs(deltaX), Math.abs(deltaY));
-
-            if (!dragInProgress) {
-              if (Math.abs(deltaX) < 10) return;
-              if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-              dragInProgress = true;
-            }
-
-            dragDeltaX = deltaX;
-            imageEl.style.transform = `translate3d(${deltaX}px, 0, 0)`;
-          });
-
-          stageEl.addEventListener('pointerup', (event) => {
-            if (!pointerDown) return;
-            pointerDown = false;
-
-            if (stageEl.hasPointerCapture(event.pointerId)) {
-              stageEl.releasePointerCapture(event.pointerId);
-            }
-
-            const movedFarEnough = dragInProgress && Math.abs(dragDeltaX) >= DRAG_THRESHOLD;
-            const finalDelta = dragDeltaX;
-            const treatAsTap = !dragInProgress && pointerTravel <= 10;
-            resetDragVisual();
-            dragInProgress = false;
-            dragDeltaX = 0;
-            pointerTravel = 0;
-
-            if (movedFarEnough) {
-              if (finalDelta < 0) {
-                renderSlide(activeIndex + 1);
-              } else {
-                renderSlide(activeIndex - 1);
-              }
-              return;
-            }
-
-            if (!treatAsTap) return;
-
-            const bounds = stageEl.getBoundingClientRect();
-            if (bounds.width <= 0) return;
-            const xWithin = event.clientX - bounds.left;
-
-            if (xWithin <= bounds.width * 0.33) {
-              renderSlide(activeIndex - 1);
-            } else if (xWithin >= bounds.width * 0.67) {
-              renderSlide(activeIndex + 1);
-            }
-          });
-
-          stageEl.addEventListener('pointercancel', () => {
-            releasePointerState();
           });
 
           stageEl.addEventListener('dragstart', (event) => {
