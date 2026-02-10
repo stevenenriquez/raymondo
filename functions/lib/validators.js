@@ -7,6 +7,7 @@ export const ALLOWED_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
+  'image/avif',
   'model/gltf-binary',
   'model/gltf+json',
   'application/octet-stream'
@@ -56,6 +57,7 @@ export function normalizeMimeType(filename, mimeType) {
   if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
   if (name.endsWith('.png')) return 'image/png';
   if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.avif')) return 'image/avif';
   if (name.endsWith('.glb')) return 'model/gltf-binary';
   if (name.endsWith('.gltf')) return 'model/gltf+json';
   return 'application/octet-stream';

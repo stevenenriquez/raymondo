@@ -137,6 +137,10 @@ const els = {
 };
 
 const MODEL_FILE_EXTENSIONS = ['.glb', '.gltf'];
+const IMAGE_OPTIMIZATION_MAX_DIMENSION = 2200;
+const IMAGE_OPTIMIZATION_MIME_TYPE = 'image/webp';
+const IMAGE_OPTIMIZATION_QUALITY = 0.78;
+const IMAGE_OPTIMIZATION_MIN_BYTES_SAVED = 4 * 1024;
 const CURRENT_YEAR = new Date().getFullYear();
 
 function setFeedback(type, text, options = {}) {
@@ -1492,9 +1496,206 @@ function inferMimeType(file) {
   if (name.endsWith('.jpg') || name.endsWith('.jpeg')) return 'image/jpeg';
   if (name.endsWith('.png')) return 'image/png';
   if (name.endsWith('.webp')) return 'image/webp';
+  if (name.endsWith('.avif')) return 'image/avif';
   if (name.endsWith('.glb')) return 'model/gltf-binary';
   if (name.endsWith('.gltf')) return 'model/gltf+json';
   return 'application/octet-stream';
+}
+
+function isImageMimeType(mimeType) {
+  return String(mimeType || '').startsWith('image/');
+}
+
+function shouldAttemptImageOptimization(mimeType) {
+  const normalized = String(mimeType || '').toLowerCase();
+  return (
+    normalized === 'image/jpeg' ||
+    normalized === 'image/png' ||
+    normalized === 'image/webp' ||
+    normalized === 'image/avif'
+  );
+}
+
+function replaceFileExtension(filename, extension) {
+  const nextExtension = String(extension || '').replace(/^\./, '') || 'webp';
+  const cleanedName = String(filename || 'file').trim() || 'file';
+  const baseName = cleanedName.replace(/\.[^.]+$/, '');
+  return `${baseName || 'file'}.${nextExtension}`;
+}
+
+function scaleToMaxDimension(width, height, maxDimension) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return { width: null, height: null };
+  }
+
+  const cap = Number(maxDimension || 0);
+  if (!Number.isFinite(cap) || cap <= 0) {
+    return { width: Math.round(width), height: Math.round(height) };
+  }
+
+  const largestSide = Math.max(width, height);
+  if (largestSide <= cap) {
+    return { width: Math.round(width), height: Math.round(height) };
+  }
+
+  const ratio = cap / largestSide;
+  return {
+    width: Math.max(1, Math.round(width * ratio)),
+    height: Math.max(1, Math.round(height * ratio))
+  };
+}
+
+function canvasToBlob(canvas, mimeType, quality) {
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), mimeType, quality);
+  });
+}
+
+function formatBytes(bytes) {
+  const amount = Number(bytes || 0);
+  if (!Number.isFinite(amount) || amount <= 0) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const index = Math.min(Math.floor(Math.log(amount) / Math.log(1024)), units.length - 1);
+  const value = amount / 1024 ** index;
+  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+async function decodeImageFile(file) {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    return {
+      width: bitmap.width,
+      height: bitmap.height,
+      source: bitmap,
+      cleanup: () => bitmap.close()
+    };
+  }
+
+  const objectUrl = URL.createObjectURL(file);
+  const image = new Image();
+  image.decoding = 'async';
+
+  try {
+    if (typeof image.decode === 'function') {
+      image.src = objectUrl;
+      await image.decode();
+    } else {
+      await new Promise((resolve, reject) => {
+        image.onload = () => resolve();
+        image.onerror = () => reject(new Error('Failed to decode image.'));
+        image.src = objectUrl;
+      });
+    }
+
+    return {
+      width: image.naturalWidth || image.width || null,
+      height: image.naturalHeight || image.height || null,
+      source: image,
+      cleanup: () => URL.revokeObjectURL(objectUrl)
+    };
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl);
+    throw error;
+  }
+}
+
+async function optimizeUploadFile(file) {
+  const sourceMimeType = inferMimeType(file);
+  if (!isImageMimeType(sourceMimeType) || !shouldAttemptImageOptimization(sourceMimeType)) {
+    return {
+      file,
+      mimeType: sourceMimeType,
+      width: null,
+      height: null,
+      optimized: false,
+      originalSize: file.size,
+      uploadSize: file.size
+    };
+  }
+
+  let decoded;
+  try {
+    decoded = await decodeImageFile(file);
+  } catch {
+    return {
+      file,
+      mimeType: sourceMimeType,
+      width: null,
+      height: null,
+      optimized: false,
+      originalSize: file.size,
+      uploadSize: file.size
+    };
+  }
+
+  const originalWidth = Number(decoded.width) || null;
+  const originalHeight = Number(decoded.height) || null;
+  const targetSize = scaleToMaxDimension(originalWidth, originalHeight, IMAGE_OPTIMIZATION_MAX_DIMENSION);
+
+  if (!targetSize.width || !targetSize.height) {
+    decoded.cleanup();
+    return {
+      file,
+      mimeType: sourceMimeType,
+      width: originalWidth,
+      height: originalHeight,
+      optimized: false,
+      originalSize: file.size,
+      uploadSize: file.size
+    };
+  }
+
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width = targetSize.width;
+    canvas.height = targetSize.height;
+    const ctx = canvas.getContext('2d');
+
+    if (!ctx) {
+      return {
+        file,
+        mimeType: sourceMimeType,
+        width: originalWidth,
+        height: originalHeight,
+        optimized: false,
+        originalSize: file.size,
+        uploadSize: file.size
+      };
+    }
+
+    ctx.drawImage(decoded.source, 0, 0, targetSize.width, targetSize.height);
+
+    const blob = await canvasToBlob(canvas, IMAGE_OPTIMIZATION_MIME_TYPE, IMAGE_OPTIMIZATION_QUALITY);
+    if (!blob || blob.size >= file.size || file.size - blob.size < IMAGE_OPTIMIZATION_MIN_BYTES_SAVED) {
+      return {
+        file,
+        mimeType: sourceMimeType,
+        width: originalWidth,
+        height: originalHeight,
+        optimized: false,
+        originalSize: file.size,
+        uploadSize: file.size
+      };
+    }
+
+    const optimizedFile = new File([blob], replaceFileExtension(file.name, 'webp'), {
+      type: IMAGE_OPTIMIZATION_MIME_TYPE,
+      lastModified: Date.now()
+    });
+
+    return {
+      file: optimizedFile,
+      mimeType: IMAGE_OPTIMIZATION_MIME_TYPE,
+      width: targetSize.width,
+      height: targetSize.height,
+      optimized: true,
+      originalSize: file.size,
+      uploadSize: optimizedFile.size
+    };
+  } finally {
+    decoded.cleanup();
+  }
 }
 
 function humanizeFilename(name) {
@@ -1524,7 +1725,7 @@ async function uploadSingleQueueItem(item) {
   }
 
   item.status = 'signing';
-  const mimeType = inferMimeType(item.file);
+  const mimeType = item.mimeType || inferMimeType(item.file);
 
   const signed = await api('/api/admin/upload-url', {
     method: 'POST',
@@ -1545,7 +1746,7 @@ async function uploadSingleQueueItem(item) {
 
   if (!uploadResponse.ok) {
     const text = await uploadResponse.text();
-    throw new Error(`Upload failed for ${item.file.name}: ${text || uploadResponse.status}`);
+    throw new Error(`Upload failed for ${item.originalName || item.file.name}: ${text || uploadResponse.status}`);
   }
 
   item.status = 'attaching';
@@ -1556,7 +1757,9 @@ async function uploadSingleQueueItem(item) {
       kind: item.kind,
       r2Key: signed.r2Key,
       mimeType,
-      altText: humanizeFilename(item.file.name),
+      width: item.width ?? null,
+      height: item.height ?? null,
+      altText: humanizeFilename(item.originalName || item.file.name),
       caption: '',
       featured: false,
       sortOrder: item.sortOrder
@@ -1584,11 +1787,21 @@ async function processUploadQueue(items) {
   }
 
   const failed = items.filter((item) => item.status === 'failed').length;
+  const optimizedCount = items.filter((item) => item.optimized).length;
+  const bytesSaved = items.reduce((total, item) => {
+    const original = Number(item.originalSize || 0);
+    const uploadedSize = Number(item.uploadSize || original);
+    return total + Math.max(0, original - uploadedSize);
+  }, 0);
+  const optimizationSummary =
+    optimizedCount > 0 && bytesSaved > 0
+      ? ` Optimized ${optimizedCount} image(s), saved ${formatBytes(bytesSaved)}.`
+      : '';
 
   if (failed > 0) {
-    setFeedback('warn', `${uploaded} uploaded, ${failed} failed. Re-upload failed files from your device.`);
+    setFeedback('warn', `${uploaded} uploaded, ${failed} failed. Re-upload failed files from your device.${optimizationSummary}`);
   } else {
-    setFeedback('success', `Uploaded ${uploaded} file(s).`);
+    setFeedback('success', `Uploaded ${uploaded} file(s).${optimizationSummary}`);
   }
 
   if (wasPublishedBeforeUpload && uploaded > 0) {
@@ -1611,19 +1824,33 @@ async function enqueueUploads(files) {
   if (!files.length) return;
 
   const queuedKinds = [];
-  const newItems = files.map((file, idx) => {
+  const newItems = [];
+
+  for (const [idx, file] of files.entries()) {
+    if (els.uploadStatus) {
+      els.uploadStatus.textContent = `Preparing ${idx + 1}/${files.length} file(s)...`;
+    }
+
     const kind = inferAssetKind(file, activeProject.discipline, activeProject.assets || [], queuedKinds);
     queuedKinds.push(kind);
+    const preparedFile = await optimizeUploadFile(file);
 
-    return {
+    newItems.push({
       id: crypto.randomUUID(),
-      file,
+      file: preparedFile.file,
+      originalName: file.name,
       kind,
+      mimeType: preparedFile.mimeType,
+      width: preparedFile.width,
+      height: preparedFile.height,
+      optimized: preparedFile.optimized,
+      originalSize: preparedFile.originalSize,
+      uploadSize: preparedFile.uploadSize,
       status: 'queued',
       error: '',
       sortOrder: nextAssetSortOrder(activeProject.assets || [], idx)
-    };
-  });
+    });
+  }
 
   state.mediaState.uploadQueue = [...newItems];
 
