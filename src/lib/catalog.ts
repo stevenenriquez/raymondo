@@ -1,19 +1,36 @@
-import type { Catalog, Project, Asset } from './types';
+import type { Catalog, Project, Asset, SiteContent } from './types';
 import catalogData from '../data/catalog.generated.json';
 
 const catalog = catalogData as Catalog;
+const defaultSiteContent: SiteContent = {
+  heroTitle: 'Graphic Design and 3D Worlds',
+  heroSubtitle:
+    'Raymondo builds identities, editorial systems, and 3D forms with a tactile visual language. Each project page includes theme inspiration, design DNA, and process cues.',
+  footerText: 'Available for identity, visual systems, and 3D direction work.\nraymondartguy@gmail.com'
+};
 
 function sortAssets(assets: Asset[]) {
   return [...assets].sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
 export function getCatalog(): Catalog {
+  const site = {
+    heroTitle: String(catalog?.site?.heroTitle || defaultSiteContent.heroTitle),
+    heroSubtitle: String(catalog?.site?.heroSubtitle || defaultSiteContent.heroSubtitle),
+    footerText: String(catalog?.site?.footerText || defaultSiteContent.footerText)
+  };
+
   return {
     ...catalog,
+    site,
     projects: catalog.projects
       .map((project) => ({ ...project, assets: sortAssets(project.assets) }))
       .sort((a, b) => a.sortOrder - b.sortOrder)
   };
+}
+
+export function getSiteContent(): SiteContent {
+  return getCatalog().site;
 }
 
 export function getPublishedProjects(): Project[] {

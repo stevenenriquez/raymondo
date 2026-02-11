@@ -1,9 +1,14 @@
 ---
 import ProjectCard from '@components/ProjectCard.astro';
 import SiteLayout from '@components/SiteLayout.astro';
-import { getCoverAsset, getPublishedProjects } from '@lib/catalog';
+import { getCoverAsset, getPublishedProjects, getSiteContent } from '@lib/catalog';
 
 const projects = getPublishedProjects();
+const siteContent = getSiteContent();
+const footerLines = String(siteContent.footerText || '')
+  .split(/\r?\n/g)
+  .map((line) => line.trim())
+  .filter(Boolean);
 ---
 
 <SiteLayout title="Raymondo Portfolio" description="Graphic and 3D design portfolio for Raymondo.">
@@ -28,11 +33,8 @@ const projects = getPublishedProjects();
     </header>
 
     <section class="hero" id="about">
-      <h2>Graphic Design and 3D Worlds</h2>
-      <p>
-        Raymondo builds identities, editorial systems, and 3D forms with a tactile visual language.
-        Each project page includes theme inspiration, design DNA, and process cues.
-      </p>
+      <h2>{siteContent.heroTitle}</h2>
+      <p>{siteContent.heroSubtitle}</p>
     </section>
 
     <section id="work" aria-label="Portfolio projects">
@@ -47,14 +49,15 @@ const projects = getPublishedProjects();
     </section>
 
     <footer class="site-footer">
-      <p>Available for identity, visual systems, and 3D direction work.</p>
-      <p>raymondartguy@gmail.com</p>
+      {footerLines.map((line) => <p>{line}</p>)}
     </footer>
   </main>
 
   <script>
     const chips = Array.from(document.querySelectorAll('.filter-chip'));
     const cards = Array.from(document.querySelectorAll('#galleryGrid .card'));
+    const supportsObserver = 'IntersectionObserver' in window;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function applyFilter(nextFilter, activeChip) {
       const filter = String(nextFilter || 'all').toLowerCase();
@@ -79,5 +82,45 @@ const projects = getPublishedProjects();
         applyFilter(chip.dataset.filter, chip);
       });
     });
+
+    function revealAllCards() {
+      cards.forEach((card) => {
+        card.classList.remove('is-reveal-pending');
+        card.classList.add('is-revealed');
+      });
+    }
+
+    function initCardReveal() {
+      if (!cards.length) return;
+      if (!supportsObserver || prefersReducedMotion) {
+        revealAllCards();
+        return;
+      }
+
+      cards.forEach((card, index) => {
+        card.classList.add('is-reveal-pending');
+        card.style.setProperty('--reveal-delay', `${Math.min(index * 55, 330)}ms`);
+      });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            const card = entry.target;
+            card.classList.remove('is-reveal-pending');
+            card.classList.add('is-revealed');
+            observer.unobserve(card);
+          });
+        },
+        {
+          threshold: 0.16,
+          rootMargin: '0px 0px -7% 0px'
+        }
+      );
+
+      cards.forEach((card) => observer.observe(card));
+    }
+
+    initCardReveal();
   </script>
 </SiteLayout>

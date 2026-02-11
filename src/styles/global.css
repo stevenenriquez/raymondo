@@ -153,14 +153,37 @@ img {
   border-radius: var(--radius);
   overflow: hidden;
   box-shadow: var(--shadow);
+  opacity: 1;
   transform: translateY(0);
-  transition: transform 170ms ease;
+  transition: transform 170ms ease, opacity 220ms ease;
   text-decoration: none;
   color: inherit;
 }
 
 .card:hover {
   transform: translateY(-4px);
+}
+
+.card.is-reveal-pending {
+  opacity: 0;
+  transform: translateY(26px);
+}
+
+.card.is-revealed {
+  animation: cardRevealUp 560ms cubic-bezier(0.2, 0.78, 0.2, 1) both;
+  animation-delay: var(--reveal-delay, 0ms);
+}
+
+@keyframes cardRevealUp {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .card-media {
@@ -250,6 +273,15 @@ img {
 .card:focus-visible {
   outline: 2px solid rgba(31, 93, 122, 0.4);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card.is-reveal-pending,
+  .card.is-revealed {
+    opacity: 1;
+    transform: translateY(0);
+    animation: none;
+  }
 }
 
 .site-footer {
@@ -2597,16 +2629,56 @@ textarea {
   gap: 0.7rem;
   justify-content: space-between;
   align-items: center;
-  flex-wrap: wrap;
-  margin-top: 0.5rem;
-  padding-top: 0.2rem;
+  flex-wrap: nowrap;
+  margin-top: 0.12rem;
+  margin-bottom: 0.62rem;
+  padding-top: 0;
 }
 
 .adminv2-toolbar-actions {
   display: inline-flex;
   gap: 0.45rem;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  margin-left: auto;
+  justify-content: flex-end;
+}
+
+.adminv2-filter-inline {
+  margin: 0;
+  flex: 1 1 auto;
+  justify-content: flex-start;
+}
+
+.adminv2-filter-wrap {
+  display: none;
+  position: relative;
+}
+
+.adminv2-filter-popover {
+  position: absolute;
+  top: calc(100% + 0.38rem);
+  left: 0;
+  margin: 0;
+  padding: 0.36rem;
+  border: 1px solid rgba(35, 27, 18, 0.2);
+  border-radius: 12px;
+  background: rgba(255, 252, 246, 0.98);
+  box-shadow: 0 12px 26px rgba(16, 12, 9, 0.18);
+  display: grid;
+  gap: 0.3rem;
+  min-width: 124px;
+  z-index: 18;
+}
+
+.adminv2-filter-popover .filter-chip {
+  width: 100%;
+  text-align: left;
+}
+
+.adminv2-filter-popover[hidden] {
+  display: none !important;
 }
 
 .adminv2-view-toggle {
@@ -2682,6 +2754,61 @@ textarea {
   margin: 0;
 }
 
+.adminv2-site-copy-panel {
+  margin: 0.9rem 0 0.95rem;
+  padding: 0.72rem;
+  border: 1px solid rgba(35, 27, 18, 0.16);
+  border-radius: 12px;
+  background:
+    radial-gradient(120% 80% at 8% 0%, rgba(191, 61, 47, 0.07), transparent),
+    radial-gradient(120% 90% at 94% 100%, rgba(31, 93, 122, 0.1), transparent),
+    rgba(255, 252, 246, 0.94);
+  display: grid;
+  gap: 0.52rem;
+}
+
+.adminv2-site-copy-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+}
+
+.adminv2-site-copy-field {
+  display: grid;
+  gap: 0.25rem;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(35, 27, 18, 0.75);
+}
+
+.adminv2-site-copy-input,
+.adminv2-site-copy-textarea {
+  border: 1px solid rgba(35, 27, 18, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 253, 249, 0.96);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  line-height: 1.35;
+  padding: 0.48rem 0.58rem;
+}
+
+.adminv2-site-copy-input:focus,
+.adminv2-site-copy-textarea:focus {
+  outline: none;
+  border-color: rgba(31, 93, 122, 0.46);
+  box-shadow: 0 0 0 2px rgba(31, 93, 122, 0.14);
+}
+
+.adminv2-site-copy-textarea {
+  min-height: 5.2rem;
+  resize: vertical;
+}
+
 .adminv2-reorder-indicator {
   margin: 0 0 1rem;
   padding: 0.2rem 0.52rem;
@@ -2698,8 +2825,12 @@ textarea {
 }
 
 .adminv2-feedback {
-  min-height: 1.1rem;
-  margin: 0 0 0.6rem;
+  min-height: 0;
+  margin: 0 0 0.62rem;
+}
+
+.adminv2-feedback:empty {
+  display: none;
 }
 
 .adminv2-feedback.is-error {
@@ -3904,16 +4035,31 @@ textarea {
   }
 
   .adminv2-toolbar {
+    flex-direction: column;
     align-items: stretch;
+    gap: 0.45rem;
+    margin-top: 0.2rem;
+    margin-bottom: 0.62rem;
   }
 
   .adminv2-toolbar-actions {
     display: inline-flex;
-    width: auto;
+    width: 100%;
     gap: 0.45rem;
+    margin-left: 0;
+    justify-content: center;
+    order: 1;
   }
 
   .adminv2-view-toggle {
+    display: inline-flex;
+  }
+
+  .adminv2-filter-inline {
+    display: none;
+  }
+
+  .adminv2-filter-wrap {
     display: inline-flex;
   }
 

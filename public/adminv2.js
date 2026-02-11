@@ -46,6 +46,13 @@ const SAVE_DEBOUNCE_MS = 700;
 const FEEDBACK_TIMEOUT_MS = 3600;
 const MODEL_FILE_EXTENSIONS = ['.glb', '.gltf'];
 const STYLE_TEMPLATE_OPTIONS = ['editorial', 'brutalist', 'minimal-grid'];
+const DEFAULT_SITE_CONTENT = {
+  heroTitle: 'Graphic Design and 3D Worlds',
+  heroSubtitle:
+    'Raymondo builds identities, editorial systems, and 3D forms with a tactile visual language. Each project page includes theme inspiration, design DNA, and process cues.',
+  footerText: 'Available for identity, visual systems, and 3D direction work.\nraymondartguy@gmail.com'
+};
+const SITE_COPY_FIELDS = ['heroTitle', 'heroSubtitle', 'footerText'];
 const EDITABLE_FIELDS = [
   'title',
   'descriptionLong',
@@ -60,6 +67,7 @@ const EDITABLE_FIELDS = [
 const state = {
   /** @type {AdminProject[]} */
   projects: [],
+  siteContent: { ...DEFAULT_SITE_CONTENT },
   filter: 'all',
   galleryView: 'cards',
   reorderMode: false,
@@ -78,6 +86,19 @@ const state = {
     /** @type {Record<string, string>} */
     lastSaved: {}
   },
+  siteSave: {
+    timer: null,
+    inFlight: false,
+    queued: false,
+    /** @type {Record<string, string>} */
+    pendingPatch: {},
+    /** @type {Record<string, string>} */
+    lastSaved: {
+      heroTitle: DEFAULT_SITE_CONTENT.heroTitle,
+      heroSubtitle: DEFAULT_SITE_CONTENT.heroSubtitle,
+      footerText: DEFAULT_SITE_CONTENT.footerText
+    }
+  },
   upload: {
     busy: false
   },
@@ -92,9 +113,15 @@ const state = {
 const els = {
   root: document.getElementById('adminV2Root'),
   filterBar: document.getElementById('adminv2FilterBar'),
+  filterMenu: document.getElementById('adminv2FilterMenu'),
+  filterToggle: document.getElementById('adminv2FilterToggle'),
   reorderToggle: document.getElementById('adminv2ReorderToggle'),
   reorderIndicator: document.getElementById('adminv2ReorderIndicator'),
   viewToggleBtn: document.getElementById('adminv2ViewToggleBtn'),
+  siteHeroTitleInput: document.getElementById('adminv2SiteHeroTitleInput'),
+  siteHeroSubtitleInput: document.getElementById('adminv2SiteHeroSubtitleInput'),
+  siteFooterInput: document.getElementById('adminv2SiteFooterInput'),
+  siteFooterPreview: document.getElementById('adminv2SiteFooterPreview'),
   addNewBtn: document.getElementById('adminv2AddNewBtn'),
   syncBtn: document.getElementById('adminv2SyncBtn'),
   galleryGrid: document.getElementById('adminv2GalleryGrid'),
@@ -146,6 +173,26 @@ function normalizeArray(value) {
         .map((item) => String(item || '').trim())
         .filter(Boolean)
     : [];
+}
+
+function normalizeSiteContent(input) {
+  const heroTitle = String(input?.heroTitle ?? '').trim();
+  const heroSubtitle = String(input?.heroSubtitle ?? '').trim();
+  const footerText = String(input?.footerText ?? '').trim();
+  return {
+    heroTitle: heroTitle || DEFAULT_SITE_CONTENT.heroTitle,
+    heroSubtitle: heroSubtitle || DEFAULT_SITE_CONTENT.heroSubtitle,
+    footerText: footerText || DEFAULT_SITE_CONTENT.footerText
+  };
+}
+
+function getSiteContentSnapshot(siteContent) {
+  const normalized = normalizeSiteContent(siteContent);
+  return {
+    heroTitle: normalized.heroTitle,
+    heroSubtitle: normalized.heroSubtitle,
+    footerText: normalized.footerText
+  };
 }
 
 function splitCommaTokens(value) {
@@ -269,6 +316,14 @@ function setSaveState(stateName, textOverride = '') {
     if (!els.saveChip) return;
     els.saveChip.classList.add('is-hidden');
   }, hideDelay);
+}
+
+function hideSaveChip() {
+  if (!els.saveChip) return;
+  clearTimeout(state.ui.saveChipTimer);
+  state.ui.saveChipTimer = null;
+  els.saveChip.classList.add('is-hidden');
+  els.saveChip.classList.remove('saved', 'saving', 'unsaved', 'error');
 }
 
 function clearFeedback() {
@@ -442,13 +497,45 @@ function applyModeToView() {
 
 }
 
-function renderFilterState() {
-  if (!els.filterBar) return;
+function isMobileFilterMenuViewport() {
+  return window.matchMedia('(max-width: 840px)').matches;
+}
 
-  els.filterBar.querySelectorAll('[data-filter]').forEach((chip) => {
-    const chipFilter = chip.dataset.filter || 'all';
-    chip.setAttribute('aria-pressed', chipFilter === state.filter ? 'true' : 'false');
+function getFilterLabel(filterValue) {
+  const value = String(filterValue || 'all').toLowerCase();
+  if (value === 'graphic') return 'Graphic';
+  if (value === '3d') return '3D';
+  return 'All';
+}
+
+function getFilterContainers() {
+  return [els.filterBar, els.filterMenu].filter((node) => node instanceof HTMLElement);
+}
+
+function setMobileFilterMenuState(isOpen) {
+  if (!(els.filterMenu instanceof HTMLElement) || !(els.filterToggle instanceof HTMLElement)) return;
+
+  const shouldOpen = isOpen && isMobileFilterMenuViewport();
+  els.filterMenu.hidden = !shouldOpen;
+  els.filterToggle.setAttribute('aria-expanded', shouldOpen ? 'true' : 'false');
+}
+
+function renderFilterState() {
+  const containers = getFilterContainers();
+  if (!containers.length) return;
+
+  containers.forEach((container) => {
+    container.querySelectorAll('[data-filter]').forEach((chip) => {
+      const chipFilter = chip.dataset.filter || 'all';
+      chip.setAttribute('aria-pressed', chipFilter === state.filter ? 'true' : 'false');
+    });
   });
+
+  if (els.filterToggle instanceof HTMLElement) {
+    const activeLabel = getFilterLabel(state.filter);
+    els.filterToggle.setAttribute('aria-label', `Filter posts (${activeLabel})`);
+    els.filterToggle.title = `Filter posts (${activeLabel})`;
+  }
 }
 
 function canReorder() {
@@ -612,6 +699,165 @@ function renderGallery() {
       ? visible.map((project) => galleryListRowMarkup(project)).join('')
       : visible.map((project) => galleryCardMarkup(project)).join('');
   els.galleryGrid.innerHTML = markup;
+}
+
+function getSiteFooterLines(footerText) {
+  return String(footerText || '')
+    .split(/\r?\n/g)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
+function renderSiteFooterPreview(footerText) {
+  if (!(els.siteFooterPreview instanceof HTMLElement)) return;
+
+  const lines = getSiteFooterLines(footerText);
+  if (!lines.length) {
+    els.siteFooterPreview.innerHTML = '';
+    return;
+  }
+
+  els.siteFooterPreview.innerHTML = lines.map((line) => `<p>${escapeHtml(line)}</p>`).join('');
+}
+
+function renderSiteContentEditor() {
+  const nextSite = normalizeSiteContent(state.siteContent);
+  state.siteContent = nextSite;
+
+  if (els.siteHeroTitleInput instanceof HTMLInputElement && document.activeElement !== els.siteHeroTitleInput) {
+    els.siteHeroTitleInput.value = nextSite.heroTitle;
+  }
+
+  if (
+    els.siteHeroSubtitleInput instanceof HTMLTextAreaElement &&
+    document.activeElement !== els.siteHeroSubtitleInput
+  ) {
+    els.siteHeroSubtitleInput.value = nextSite.heroSubtitle;
+  }
+
+  if (els.siteFooterInput instanceof HTMLTextAreaElement && document.activeElement !== els.siteFooterInput) {
+    els.siteFooterInput.value = nextSite.footerText;
+  }
+
+  renderSiteFooterPreview(nextSite.footerText);
+}
+
+function clearSiteSaveTimer() {
+  if (state.siteSave.timer) {
+    window.clearTimeout(state.siteSave.timer);
+    state.siteSave.timer = null;
+  }
+}
+
+function queueSiteContentPatch(field, value, immediate = false) {
+  if (!SITE_COPY_FIELDS.includes(field)) return;
+  const normalizedValue = String(value ?? '').trim();
+  const lastSaved = String(state.siteSave.lastSaved[field] ?? '');
+
+  if (normalizedValue === lastSaved) {
+    delete state.siteSave.pendingPatch[field];
+  } else {
+    state.siteSave.pendingPatch[field] = normalizedValue;
+  }
+
+  const hasPending = Object.keys(state.siteSave.pendingPatch).length > 0;
+  if (hasPending) {
+    setSaveState('unsaved');
+  } else if (!state.save.inFlight && !state.siteSave.inFlight) {
+    setSaveState('saved');
+  }
+
+  if (!hasPending) {
+    clearSiteSaveTimer();
+    return;
+  }
+
+  if (immediate) {
+    clearSiteSaveTimer();
+    flushSiteContentPatch().catch((error) => {
+      setFeedback(error.message, { type: 'error', scope: 'gallery', timeout: 7000 });
+    });
+    return;
+  }
+
+  clearSiteSaveTimer();
+  state.siteSave.timer = window.setTimeout(() => {
+    flushSiteContentPatch().catch((error) => {
+      setFeedback(error.message, { type: 'error', scope: 'gallery', timeout: 7000 });
+    });
+  }, SAVE_DEBOUNCE_MS);
+}
+
+async function flushSiteContentPatch() {
+  const patchKeys = Object.keys(state.siteSave.pendingPatch);
+  if (!patchKeys.length) return;
+
+  if (state.siteSave.inFlight) {
+    state.siteSave.queued = true;
+    return;
+  }
+
+  const patch = { ...state.siteSave.pendingPatch };
+  state.siteSave.pendingPatch = {};
+  state.siteSave.inFlight = true;
+  state.siteSave.queued = false;
+  setSaveState('saving');
+
+  try {
+    const response = await api('/api/admin/site-content', {
+      method: 'POST',
+      body: JSON.stringify({
+        ...patch,
+        autosave: true
+      })
+    });
+
+    const nextSite = normalizeSiteContent(response?.site || { ...state.siteContent, ...patch });
+    state.siteContent = nextSite;
+    state.siteSave.lastSaved = getSiteContentSnapshot(nextSite);
+    renderSiteContentEditor();
+
+    if (Object.keys(state.siteSave.pendingPatch).length > 0) {
+      setSaveState('unsaved');
+    } else if (!state.save.inFlight) {
+      setSaveState('saved');
+    }
+  } catch (error) {
+    state.siteSave.pendingPatch = { ...patch, ...state.siteSave.pendingPatch };
+    setSaveState('error');
+    setFeedback(error.message, { type: 'error', scope: 'gallery', timeout: 7000 });
+    throw error;
+  } finally {
+    state.siteSave.inFlight = false;
+    if (state.siteSave.queued || Object.keys(state.siteSave.pendingPatch).length > 0) {
+      state.siteSave.queued = false;
+      state.siteSave.timer = window.setTimeout(() => {
+        flushSiteContentPatch().catch((error) => {
+          setFeedback(error.message, { type: 'error', scope: 'gallery', timeout: 7000 });
+        });
+      }, 0);
+    }
+  }
+}
+
+async function flushSiteContentBeforeNavigation() {
+  clearSiteSaveTimer();
+  if (state.siteSave.inFlight) {
+    state.siteSave.queued = true;
+    const startedAt = Date.now();
+    while (state.siteSave.inFlight) {
+      if (Date.now() - startedAt > 12000) {
+        throw new Error('Timed out while waiting for site copy save.');
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, 40));
+    }
+  }
+  if (Object.keys(state.siteSave.pendingPatch).length === 0) return;
+  try {
+    await flushSiteContentPatch();
+  } catch {
+    // Keep current behavior: errors are surfaced by flushSiteContentPatch.
+  }
 }
 
 function clearDragState() {
@@ -1732,14 +1978,20 @@ function handleEditableBlur(event) {
   queueFieldPatch(field, value, true);
 }
 
-function updateActiveProject(project) {
+function updateActiveProject(project, options = {}) {
+  const { showSavedState = true } = options;
+
   state.activeProject = normalizeProject(project);
   state.activeId = state.activeProject.id;
   state.save.lastSaved = getEditableSnapshot(state.activeProject);
   state.save.pendingPatch = {};
   state.save.queued = false;
   clearSaveTimer();
-  setSaveState('saved');
+  if (showSavedState) {
+    setSaveState('saved');
+  } else {
+    hideSaveChip();
+  }
   updateProjectSummary(state.activeProject);
   if (state.ui.activeAssetId && !getAssetById(state.activeProject, state.ui.activeAssetId)) {
     state.ui.activeAssetId = null;
@@ -1753,6 +2005,30 @@ async function loadProjects() {
   state.projects = normalizeProjectCollection(payload.projects || []);
 }
 
+async function loadSiteContent() {
+  try {
+    const payload = await api('/api/admin/site-content');
+    state.siteContent = normalizeSiteContent(payload?.site || DEFAULT_SITE_CONTENT);
+    state.siteSave.lastSaved = getSiteContentSnapshot(state.siteContent);
+    state.siteSave.pendingPatch = {};
+    state.siteSave.queued = false;
+    clearSiteSaveTimer();
+    renderSiteContentEditor();
+  } catch (error) {
+    state.siteContent = { ...DEFAULT_SITE_CONTENT };
+    state.siteSave.lastSaved = getSiteContentSnapshot(state.siteContent);
+    state.siteSave.pendingPatch = {};
+    state.siteSave.queued = false;
+    clearSiteSaveTimer();
+    renderSiteContentEditor();
+    setFeedback(`Site copy failed to load: ${error.message}`, {
+      type: 'warn',
+      scope: 'gallery',
+      timeout: 7000
+    });
+  }
+}
+
 async function loadProjectDetail(projectId) {
   const payload = await api(`/api/admin/projects/${encodeURIComponent(projectId)}`);
   if (!payload.project) {
@@ -1762,6 +2038,7 @@ async function loadProjectDetail(projectId) {
 }
 
 async function createNewProject() {
+  await flushSiteContentBeforeNavigation();
   const now = Date.now();
   const response = await api('/api/admin/projects', {
     method: 'POST',
@@ -1789,6 +2066,8 @@ async function createNewProject() {
 }
 
 async function syncSite() {
+  await flushSiteContentBeforeNavigation();
+
   const confirmed = window.confirm(
     'Sync site now? This will trigger deployment and publish all pending ordering/content/status changes.'
   );
@@ -1861,6 +2140,8 @@ async function goToDetail(projectId, options = {}) {
   const { pushHistory = true, replaceHistory = false } = options;
   const targetId = normalizeString(projectId || '');
 
+  await flushSiteContentBeforeNavigation();
+
   if (!targetId) {
     await goToGallery({ pushHistory, replaceHistory });
     return;
@@ -1883,7 +2164,7 @@ async function goToDetail(projectId, options = {}) {
   const token = ++state.routeToken;
   state.mode = 'detail';
   applyModeToView();
-  setSaveState('saving', 'Loading...');
+  hideSaveChip();
 
   if (pushHistory) {
     writeRoutePostId(targetId, { replace: replaceHistory });
@@ -1893,7 +2174,7 @@ async function goToDetail(projectId, options = {}) {
     const project = await loadProjectDetail(targetId);
     if (token !== state.routeToken) return;
 
-    updateActiveProject(project);
+    updateActiveProject(project, { showSavedState: false });
     renderDetail();
     clearFeedback();
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -2321,6 +2602,28 @@ async function removePaletteColor(color) {
   renderPaletteDialog();
 }
 
+function onSiteHeroTitleInput(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  state.siteContent.heroTitle = target.value;
+  queueSiteContentPatch('heroTitle', target.value, false);
+}
+
+function onSiteHeroSubtitleInput(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLTextAreaElement)) return;
+  state.siteContent.heroSubtitle = target.value;
+  queueSiteContentPatch('heroSubtitle', target.value, false);
+}
+
+function onSiteFooterInput(event) {
+  const target = event.target;
+  if (!(target instanceof HTMLTextAreaElement)) return;
+  state.siteContent.footerText = target.value;
+  renderSiteFooterPreview(target.value);
+  queueSiteContentPatch('footerText', target.value, false);
+}
+
 function onFilterChipClick(event) {
   const chip = event.target.closest('[data-filter]');
   if (!chip) return;
@@ -2332,6 +2635,7 @@ function onFilterChipClick(event) {
     state.reorderMode = false;
   }
 
+  setMobileFilterMenuState(false);
   renderGallery();
 }
 
@@ -2668,7 +2972,15 @@ function onRoutePopState() {
 
 function wireEvents() {
   els.filterBar?.addEventListener('click', onFilterChipClick);
+  els.filterMenu?.addEventListener('click', onFilterChipClick);
   els.root?.addEventListener('click', onRootClick);
+
+  els.filterToggle?.addEventListener('click', (event) => {
+    event.preventDefault();
+    if (!(els.filterToggle instanceof HTMLElement)) return;
+    const isOpen = els.filterToggle.getAttribute('aria-expanded') === 'true';
+    setMobileFilterMenuState(!isOpen);
+  });
 
   els.reorderToggle?.addEventListener('click', () => {
     if (state.filter !== 'all') {
@@ -2695,6 +3007,31 @@ function wireEvents() {
     syncSite().catch((error) => {
       setFeedback(error.message, { type: 'error', scope: state.mode === 'detail' ? 'detail' : 'gallery', timeout: 9000 });
     });
+  });
+
+  els.siteHeroTitleInput?.addEventListener('input', onSiteHeroTitleInput);
+  els.siteHeroTitleInput?.addEventListener('blur', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLInputElement)) return;
+    state.siteContent.heroTitle = target.value;
+    queueSiteContentPatch('heroTitle', target.value, true);
+  });
+
+  els.siteHeroSubtitleInput?.addEventListener('input', onSiteHeroSubtitleInput);
+  els.siteHeroSubtitleInput?.addEventListener('blur', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    state.siteContent.heroSubtitle = target.value;
+    queueSiteContentPatch('heroSubtitle', target.value, true);
+  });
+
+  els.siteFooterInput?.addEventListener('input', onSiteFooterInput);
+  els.siteFooterInput?.addEventListener('blur', (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLTextAreaElement)) return;
+    state.siteContent.footerText = target.value;
+    renderSiteFooterPreview(target.value);
+    queueSiteContentPatch('footerText', target.value, true);
   });
 
   els.galleryGrid?.addEventListener('click', onGalleryClick);
@@ -2828,6 +3165,33 @@ function wireEvents() {
   });
 
   window.addEventListener('popstate', onRoutePopState);
+
+  document.addEventListener('click', (event) => {
+    if (!isMobileFilterMenuViewport()) return;
+    if (!(els.filterMenu instanceof HTMLElement) || !(els.filterToggle instanceof HTMLElement)) return;
+    if (els.filterMenu.hidden) return;
+    if (!(event.target instanceof Node)) return;
+    if (els.filterMenu.contains(event.target) || els.filterToggle.contains(event.target)) return;
+    setMobileFilterMenuState(false);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    setMobileFilterMenuState(false);
+  });
+
+  const viewportQuery = window.matchMedia('(max-width: 840px)');
+  const handleViewportChange = () => {
+    if (!viewportQuery.matches) {
+      setMobileFilterMenuState(false);
+    }
+  };
+
+  if (typeof viewportQuery.addEventListener === 'function') {
+    viewportQuery.addEventListener('change', handleViewportChange);
+  } else if (typeof viewportQuery.addListener === 'function') {
+    viewportQuery.addListener(handleViewportChange);
+  }
 }
 
 async function init() {
@@ -2837,7 +3201,9 @@ async function init() {
     applyModeToView();
     wireEvents();
 
-    await loadProjects();
+    await Promise.all([loadProjects(), loadSiteContent()]);
+    renderSiteContentEditor();
+    setMobileFilterMenuState(false);
     if (routePostId) {
       await goToDetail(routePostId, { pushHistory: false, replaceHistory: true });
       return;

@@ -1,5 +1,12 @@
 import { safeJsonParseArray } from './validators';
 
+const DEFAULT_SITE_CONTENT = {
+  heroTitle: 'Graphic Design and 3D Worlds',
+  heroSubtitle:
+    'Raymondo builds identities, editorial systems, and 3D forms with a tactile visual language. Each project page includes theme inspiration, design DNA, and process cues.',
+  footerText: 'Available for identity, visual systems, and 3D direction work.\nraymondartguy@gmail.com'
+};
+
 function mapProjectRow(row) {
   return {
     id: row.id,
@@ -45,6 +52,96 @@ function mapAssetRow(row, publicAssetBaseUrl) {
     sortOrder: Number(row.sort_order || 0),
     url: publicAssetBaseUrl ? `${publicAssetBaseUrl}/${safeKey}` : `/api/files/${safeKey}`
   };
+}
+
+function mapSiteContentRow(row) {
+  return {
+    heroTitle: String(row?.home_hero_title ?? DEFAULT_SITE_CONTENT.heroTitle),
+    heroSubtitle: String(row?.home_hero_subtitle ?? DEFAULT_SITE_CONTENT.heroSubtitle),
+    footerText: String(row?.home_footer_text ?? DEFAULT_SITE_CONTENT.footerText)
+  };
+}
+
+async function ensureSiteContentRow(db) {
+  await db
+    .prepare(
+      `CREATE TABLE IF NOT EXISTS site_settings (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        home_hero_title TEXT NOT NULL DEFAULT '',
+        home_hero_subtitle TEXT NOT NULL DEFAULT '',
+        home_footer_text TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      )`
+    )
+    .run();
+
+  const columns = await db.prepare('PRAGMA table_info(site_settings)').all();
+  const hasFooterTextColumn = Array.isArray(columns?.results)
+    ? columns.results.some((column) => column?.name === 'home_footer_text')
+    : false;
+
+  if (!hasFooterTextColumn) {
+    await db
+      .prepare("ALTER TABLE site_settings ADD COLUMN home_footer_text TEXT NOT NULL DEFAULT ''")
+      .run();
+  }
+
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO site_settings (id, home_hero_title, home_hero_subtitle, home_footer_text, updated_at)
+       VALUES (1, ?, ?, ?, ?)
+       ON CONFLICT(id) DO NOTHING`
+    )
+    .bind(
+      DEFAULT_SITE_CONTENT.heroTitle,
+      DEFAULT_SITE_CONTENT.heroSubtitle,
+      DEFAULT_SITE_CONTENT.footerText,
+      now
+    )
+    .run();
+}
+
+export async function getSiteContent(db) {
+  await ensureSiteContentRow(db);
+  const row = await db
+    .prepare('SELECT home_hero_title, home_hero_subtitle, home_footer_text FROM site_settings WHERE id = 1')
+    .first();
+  return mapSiteContentRow(row);
+}
+
+export async function upsertSiteContent(db, payload) {
+  const current = await getSiteContent(db);
+  const next = {
+    heroTitle:
+      payload && Object.prototype.hasOwnProperty.call(payload, 'heroTitle')
+        ? String(payload.heroTitle ?? '')
+        : current.heroTitle,
+    heroSubtitle:
+      payload && Object.prototype.hasOwnProperty.call(payload, 'heroSubtitle')
+        ? String(payload.heroSubtitle ?? '')
+        : current.heroSubtitle,
+    footerText:
+      payload && Object.prototype.hasOwnProperty.call(payload, 'footerText')
+        ? String(payload.footerText ?? '')
+        : current.footerText
+  };
+
+  const now = new Date().toISOString();
+  await db
+    .prepare(
+      `INSERT INTO site_settings (id, home_hero_title, home_hero_subtitle, home_footer_text, updated_at)
+       VALUES (1, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         home_hero_title = excluded.home_hero_title,
+         home_hero_subtitle = excluded.home_hero_subtitle,
+         home_footer_text = excluded.home_footer_text,
+         updated_at = excluded.updated_at`
+    )
+    .bind(next.heroTitle, next.heroSubtitle, next.footerText, now)
+    .run();
+
+  return next;
 }
 
 export async function listProjects(db) {

@@ -42,8 +42,15 @@ export interface Project {
   assets: Asset[];
 }
 
+export interface SiteContent {
+  heroTitle: string;
+  heroSubtitle: string;
+  footerText: string;
+}
+
 export interface Catalog {
   generatedAt: string;
+  site: SiteContent;
   projects: Project[];
 }
 

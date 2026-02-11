@@ -1,5 +1,10 @@
 {
   "generatedAt": "2026-02-08T00:00:00.000Z",
+  "site": {
+    "heroTitle": "Graphic Design and 3D Worlds",
+    "heroSubtitle": "Raymondo builds identities, editorial systems, and 3D forms with a tactile visual language. Each project page includes theme inspiration, design DNA, and process cues.",
+    "footerText": "Available for identity, visual systems, and 3D direction work.\nraymondartguy@gmail.com"
+  },
   "projects": [
     {
       "id": "proj_01",

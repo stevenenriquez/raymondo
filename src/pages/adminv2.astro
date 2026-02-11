@@ -24,9 +24,51 @@ import SiteLayout from '@components/SiteLayout.astro';
     </header>
 
     <section id="work" aria-label="Portfolio projects" class="adminv2-gallery-view" data-adminv2-view="gallery" hidden>
+      <section class="adminv2-site-copy-panel" aria-label="Homepage and footer copy">
+        <h2 class="adminv2-site-copy-title">Homepage</h2>
+        <label class="adminv2-site-copy-field">
+          Header
+          <input id="adminv2SiteHeroTitleInput" class="adminv2-site-copy-input" type="text" />
+        </label>
+        <label class="adminv2-site-copy-field">
+          Subheader
+          <textarea id="adminv2SiteHeroSubtitleInput" class="adminv2-site-copy-textarea" rows="3"></textarea>
+        </label>
+        <label class="adminv2-site-copy-field">
+          Footer
+          <textarea id="adminv2SiteFooterInput" class="adminv2-site-copy-textarea" rows="3"></textarea>
+        </label>
+      </section>
+
       <div class="adminv2-toolbar">
-        <p class="notice adminv2-toolbar-note">Create/Manage posts here.</p>
+        <div class="filter-bar adminv2-filter-inline" id="adminv2FilterBar">
+          <button class="filter-chip" data-filter="all" aria-pressed="true" type="button">All</button>
+          <button class="filter-chip" data-filter="graphic" aria-pressed="false" type="button">Graphic</button>
+          <button class="filter-chip" data-filter="3d" aria-pressed="false" type="button">3D</button>
+        </div>
         <div class="adminv2-toolbar-actions">
+          <div class="adminv2-filter-wrap">
+            <button
+              type="button"
+              class="btn secondary adminv2-tool-btn adminv2-filter-toggle"
+              id="adminv2FilterToggle"
+              aria-expanded="false"
+              aria-controls="adminv2FilterMenu"
+              aria-label="Filter posts (All)"
+              title="Filter posts (All)"
+            >
+              <svg class="adminv2-tool-icon adminv2-tool-icon-filter" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4.5 6h15"></path>
+                <path d="M7.5 12h9"></path>
+                <path d="M10 18h4"></path>
+              </svg>
+            </button>
+            <div class="filter-bar adminv2-filter-popover" id="adminv2FilterMenu" hidden>
+              <button class="filter-chip" data-filter="all" aria-pressed="true" type="button">All</button>
+              <button class="filter-chip" data-filter="graphic" aria-pressed="false" type="button">Graphic</button>
+              <button class="filter-chip" data-filter="3d" aria-pressed="false" type="button">3D</button>
+            </div>
+          </div>
           <button type="button" class="btn secondary adminv2-tool-btn adminv2-view-toggle-btn" id="adminv2ViewToggleBtn" data-view="cards" aria-pressed="false" aria-label="Switch to list view" title="Switch to list view">
             <svg class="adminv2-tool-icon adminv2-tool-icon-cards" viewBox="0 0 24 24" aria-hidden="true">
               <rect x="3" y="4" width="7.5" height="7.5" rx="1.2"></rect>
@@ -70,12 +112,6 @@ import SiteLayout from '@components/SiteLayout.astro';
         </div>
       </div>
 
-      <div class="filter-bar" id="adminv2FilterBar">
-        <button class="filter-chip" data-filter="all" aria-pressed="true" type="button">All</button>
-        <button class="filter-chip" data-filter="graphic" aria-pressed="false" type="button">Graphic</button>
-        <button class="filter-chip" data-filter="3d" aria-pressed="false" type="button">3D</button>
-      </div>
-
       <p class="notice adminv2-feedback" id="adminv2Feedback" aria-live="polite"></p>
       <p class="notice adminv2-reorder-indicator" id="adminv2ReorderIndicator" hidden>Reordering mode: drag posts to reorder</p>
       <div class="gallery-grid adminv2-gallery-grid" id="adminv2GalleryGrid"></div>
@@ -85,11 +121,6 @@ import SiteLayout from '@components/SiteLayout.astro';
       <p class="notice adminv2-feedback" id="adminv2DetailFeedback" aria-live="polite"></p>
       <div id="adminv2DetailMount"></div>
     </section>
-
-    <footer class="site-footer" data-adminv2-view="gallery" hidden>
-      <p>Available for identity, visual systems, and 3D direction work.</p>
-      <p>raymondartguy@gmail.com</p>
-    </footer>
   </main>
 
   <input id="adminv2FileInput" type="file" multiple hidden />

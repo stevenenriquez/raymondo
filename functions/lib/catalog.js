@@ -1,4 +1,4 @@
-import { listPublishedProjectsWithAssets } from './db';
+import { getSiteContent, listPublishedProjectsWithAssets } from './db';
 
 function getProjectCoverAsset(project) {
   return project.assets.find((asset) => asset.id === project.coverAssetId) || project.assets[0] || null;
@@ -22,6 +22,7 @@ export function computeProjectReadiness(project) {
 
 export async function buildPublishedCatalog(env) {
   const publicAssetBaseUrl = env.ASSET_PUBLIC_BASE_URL || '';
+  const site = await getSiteContent(env.PORTFOLIO_DB);
   const projects = await listPublishedProjectsWithAssets(env.PORTFOLIO_DB, publicAssetBaseUrl);
 
   const errors = [];
@@ -57,6 +58,7 @@ export async function buildPublishedCatalog(env) {
     readinessByProject,
     snapshot: {
       generatedAt: new Date().toISOString(),
+      site,
       projects: catalogProjects
     }
   };
