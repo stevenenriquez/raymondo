@@ -112,19 +112,15 @@ export async function getSiteContent(db) {
 
 export async function upsertSiteContent(db, payload) {
   const current = await getSiteContent(db);
+  const hasField = (key) =>
+    Boolean(payload) &&
+    Object.prototype.hasOwnProperty.call(payload, key) &&
+    payload[key] !== undefined;
+
   const next = {
-    heroTitle:
-      payload && Object.prototype.hasOwnProperty.call(payload, 'heroTitle')
-        ? String(payload.heroTitle ?? '')
-        : current.heroTitle,
-    heroSubtitle:
-      payload && Object.prototype.hasOwnProperty.call(payload, 'heroSubtitle')
-        ? String(payload.heroSubtitle ?? '')
-        : current.heroSubtitle,
-    footerText:
-      payload && Object.prototype.hasOwnProperty.call(payload, 'footerText')
-        ? String(payload.footerText ?? '')
-        : current.footerText
+    heroTitle: hasField('heroTitle') ? String(payload.heroTitle ?? '') : current.heroTitle,
+    heroSubtitle: hasField('heroSubtitle') ? String(payload.heroSubtitle ?? '') : current.heroSubtitle,
+    footerText: hasField('footerText') ? String(payload.footerText ?? '') : current.footerText
   };
 
   const now = new Date().toISOString();

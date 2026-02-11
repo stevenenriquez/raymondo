@@ -8,11 +8,18 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   const body = await readJson(context.request);
-  const site = await upsertSiteContent(context.env.PORTFOLIO_DB, {
-    heroTitle: body.heroTitle,
-    heroSubtitle: body.heroSubtitle,
-    footerText: body.footerText
-  });
+  const patch = {};
+  if (Object.prototype.hasOwnProperty.call(body || {}, 'heroTitle')) {
+    patch.heroTitle = body.heroTitle;
+  }
+  if (Object.prototype.hasOwnProperty.call(body || {}, 'heroSubtitle')) {
+    patch.heroSubtitle = body.heroSubtitle;
+  }
+  if (Object.prototype.hasOwnProperty.call(body || {}, 'footerText')) {
+    patch.footerText = body.footerText;
+  }
+
+  const site = await upsertSiteContent(context.env.PORTFOLIO_DB, patch);
   return json({ site, autosave: body?.autosave === true });
 }
 

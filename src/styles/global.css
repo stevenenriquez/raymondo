@@ -116,9 +116,13 @@ img {
 }
 
 .filter-chip {
+  appearance: none;
+  -webkit-appearance: none;
   border: 0;
   border-radius: 999px;
   background: var(--chip-bg);
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
   padding: 0.52rem 0.92rem;
   cursor: pointer;
   font-family: var(--font-display);
@@ -130,6 +134,7 @@ img {
 .filter-chip[aria-pressed='true'] {
   background: var(--chip-active);
   color: var(--chip-active-text);
+  -webkit-text-fill-color: var(--chip-active-text);
 }
 
 .gallery-grid {
@@ -2570,7 +2575,7 @@ textarea {
   justify-content: center;
   border: 1px solid rgba(35, 27, 18, 0.26);
   border-radius: 999px;
-  background: rgba(255, 253, 248, 0.9);
+  background: var(--bg);
   color: var(--text);
   line-height: 0;
   padding: 0;
@@ -2630,7 +2635,7 @@ textarea {
   justify-content: space-between;
   align-items: center;
   flex-wrap: nowrap;
-  margin-top: 0.12rem;
+  margin-top: 0.62rem;
   margin-bottom: 0.62rem;
   padding-top: 0;
 }
@@ -4038,7 +4043,7 @@ textarea {
     flex-direction: column;
     align-items: stretch;
     gap: 0.45rem;
-    margin-top: 0.2rem;
+    margin-top: 0.62rem;
     margin-bottom: 0.62rem;
   }
 
@@ -4195,13 +4200,13 @@ textarea {
     padding: 0;
     border-radius: 999px;
     border-color: rgba(35, 27, 18, 0.2);
-    background: rgba(255, 253, 248, 0.9);
+    background: var(--bg);
     box-shadow: 0 8px 22px rgba(16, 12, 9, 0.14);
     backdrop-filter: blur(8px);
   }
 
   [data-mobile-nav].is-nav-open .mobile-nav-toggle {
-    background: rgba(253, 250, 243, 0.98);
+    background: var(--bg);
     box-shadow: 0 10px 26px rgba(16, 12, 9, 0.2);
   }
 
