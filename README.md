@@ -15,7 +15,9 @@ Static-first portfolio for graphic design and 3D work, with an admin dashboard f
 - `src/pages/index.astro`: public gallery with discipline filter chips
 - `src/pages/projects/[slug].astro`: static project detail pages
 - `src/pages/admin.astro`: admin dashboard UI
+- `src/pages/adminv2.astro`: homepage-mirror inline admin editor
 - `public/admin.js`: admin dashboard client logic
+- `public/adminv2.js`: admin v2 client logic
 - `functions/api/admin/*`: admin API
 - `functions/api/assets/[[key]].js`: asset delivery endpoint
 - `migrations/0001_init.sql`: D1 schema
@@ -98,6 +100,7 @@ The same bucket stores uploaded media and `published/catalog.json`.
 Protect these paths with Cloudflare Access email one-time code:
 
 - `/admin`
+- `/adminv2`
 - `/api/admin/*`
 
 The APIs also verify `CF-Access-Authenticated-User-Email`.
@@ -121,6 +124,8 @@ Publish does:
 Admin preflight endpoint:
 
 - `POST /api/admin/publish` with `{ "dryRun": true }` runs validation without writing snapshots.
+
+`/adminv2` is editing-only in v1 (inline text edits, reorder, and asset uploads). Publish/sync remains in `/admin`.
 
 ## Notes
 

@@ -1,0 +1,142 @@
+---
+import SiteLayout from '@components/SiteLayout.astro';
+---
+
+<SiteLayout title="Raymondo Admin V2" description="Inline admin editing with homepage parity.">
+  <main class="shell adminv2-root" id="adminV2Root" data-mode="gallery">
+    <header class="site-header">
+      <h1 class="brand">Raymondo</h1>
+      <nav class="site-nav">
+        <a href="/admin" class="adminv2-nav-admin">Admin Classic</a>
+        <a href="/adminv2" class="adminv2-nav-admin">Admin V2</a>
+        <a href="/">View Site</a>
+      </nav>
+    </header>
+
+    <section id="work" aria-label="Portfolio projects" class="adminv2-gallery-view" data-adminv2-view="gallery" hidden>
+      <div class="adminv2-toolbar">
+        <p class="notice adminv2-toolbar-note">Create/Manage posts here.</p>
+        <div class="adminv2-toolbar-actions">
+          <div class="adminv2-view-toggle" role="group" aria-label="Gallery layout">
+            <button type="button" class="btn secondary" id="adminv2ViewCardsBtn" aria-pressed="true">Cards</button>
+            <button type="button" class="btn secondary" id="adminv2ViewListBtn" aria-pressed="false">List</button>
+          </div>
+          <button type="button" class="btn secondary" id="adminv2AddNewBtn">Add New</button>
+          <button type="button" class="btn secondary" id="adminv2SyncBtn">Sync</button>
+          <button type="button" class="btn secondary" id="adminv2ReorderToggle" aria-pressed="false">Reorder</button>
+        </div>
+      </div>
+
+      <div class="filter-bar" id="adminv2FilterBar">
+        <button class="filter-chip" data-filter="all" aria-pressed="true" type="button">All</button>
+        <button class="filter-chip" data-filter="graphic" aria-pressed="false" type="button">Graphic</button>
+        <button class="filter-chip" data-filter="3d" aria-pressed="false" type="button">3D</button>
+      </div>
+
+      <p class="notice adminv2-feedback" id="adminv2Feedback" aria-live="polite"></p>
+      <div class="gallery-grid adminv2-gallery-grid" id="adminv2GalleryGrid"></div>
+    </section>
+
+    <section class="adminv2-detail-view" id="adminv2DetailView" data-adminv2-view="detail" hidden>
+      <p class="notice adminv2-feedback" id="adminv2DetailFeedback" aria-live="polite"></p>
+      <div id="adminv2DetailMount"></div>
+    </section>
+
+    <footer class="site-footer" data-adminv2-view="gallery" hidden>
+      <p>Available for identity, visual systems, and 3D direction work.</p>
+      <p>raymondartguy@gmail.com</p>
+    </footer>
+  </main>
+
+  <input id="adminv2FileInput" type="file" multiple hidden />
+  <div class="adminv2-save-chip saved" id="adminv2SaveChip" aria-live="polite">All changes saved</div>
+  <dialog id="adminv2CoverDialog" class="adminv2-dialog">
+    <article class="adminv2-dialog-card">
+      <header class="adminv2-dialog-head">
+        <h2>Choose Cover Asset</h2>
+        <button type="button" class="btn secondary" id="adminv2CloseCoverBtn">Close</button>
+      </header>
+      <p class="notice">Pick an existing image/poster as cover, or add a new photo.</p>
+      <div id="adminv2CoverAssetList" class="adminv2-cover-list"></div>
+    </article>
+  </dialog>
+  <dialog id="adminv2AssetDialog" class="adminv2-dialog">
+    <article class="adminv2-dialog-card">
+      <header class="adminv2-dialog-head">
+        <h2>Edit Asset</h2>
+        <button type="button" class="btn secondary" id="adminv2CloseAssetBtn">Close</button>
+      </header>
+
+      <label class="adminv2-meta-label">
+        Title
+        <input id="adminv2AssetTitleInput" class="adminv2-meta-input" type="text" />
+      </label>
+
+      <label class="adminv2-meta-label">
+        Alt Text
+        <input id="adminv2AssetAltInput" class="adminv2-meta-input" type="text" />
+      </label>
+
+      <label class="adminv2-meta-label">
+        Kind
+        <select id="adminv2AssetKindSelect" class="adminv2-meta-select">
+          <option value="image">Image</option>
+          <option value="poster">Poster</option>
+          <option value="model3d">3D Model</option>
+        </select>
+      </label>
+
+      <div class="adminv2-asset-dialog-actions">
+        <button type="button" class="btn secondary" id="adminv2SaveAssetBtn">Save Asset</button>
+        <button type="button" class="btn danger" id="adminv2DeleteAssetBtn">Delete Asset</button>
+      </div>
+    </article>
+  </dialog>
+  <dialog id="adminv2TagDialog" class="adminv2-dialog">
+    <article class="adminv2-dialog-card">
+      <header class="adminv2-dialog-head">
+        <h2>Edit Tags</h2>
+        <button type="button" class="btn secondary" id="adminv2CloseTagBtn">Close</button>
+      </header>
+      <div class="adminv2-meta-group">
+        <h4>Current Tags</h4>
+        <div class="adminv2-token-list" id="adminv2TagDialogList"></div>
+      </div>
+      <label class="adminv2-meta-label">
+        Add Tags
+        <input
+          id="adminv2TagDialogInput"
+          class="adminv2-meta-input"
+          type="text"
+          placeholder="identity, editorial, 3d"
+        />
+      </label>
+      <div class="adminv2-asset-dialog-actions">
+        <button type="button" class="btn secondary" id="adminv2AddTagBtn">Add Tags</button>
+      </div>
+    </article>
+  </dialog>
+  <dialog id="adminv2PaletteDialog" class="adminv2-dialog">
+    <article class="adminv2-dialog-card">
+      <header class="adminv2-dialog-head">
+        <h2>Edit Palette</h2>
+        <button type="button" class="btn secondary" id="adminv2ClosePaletteBtn">Close</button>
+      </header>
+      <div class="adminv2-meta-group">
+        <h4>Current Colors</h4>
+        <div class="adminv2-token-list" id="adminv2PaletteDialogList"></div>
+      </div>
+      <div class="adminv2-palette-controls">
+        <input type="color" class="adminv2-palette-picker" id="adminv2PaletteDialogPicker" value="#d65c3b" aria-label="Pick palette color" />
+        <button type="button" class="btn secondary" id="adminv2AddPaletteBtn">Add Color</button>
+      </div>
+    </article>
+  </dialog>
+
+  <script is:inline type="module" src="/adminv2.js"></script>
+  <script
+    is:inline
+    type="module"
+    src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
+  ></script>
+</SiteLayout>
