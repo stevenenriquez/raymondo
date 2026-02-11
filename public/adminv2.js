@@ -93,8 +93,8 @@ const els = {
   root: document.getElementById('adminV2Root'),
   filterBar: document.getElementById('adminv2FilterBar'),
   reorderToggle: document.getElementById('adminv2ReorderToggle'),
-  viewCardsBtn: document.getElementById('adminv2ViewCardsBtn'),
-  viewListBtn: document.getElementById('adminv2ViewListBtn'),
+  reorderIndicator: document.getElementById('adminv2ReorderIndicator'),
+  viewToggleBtn: document.getElementById('adminv2ViewToggleBtn'),
   addNewBtn: document.getElementById('adminv2AddNewBtn'),
   syncBtn: document.getElementById('adminv2SyncBtn'),
   galleryGrid: document.getElementById('adminv2GalleryGrid'),
@@ -428,9 +428,16 @@ function renderReorderToggle() {
   if (!els.reorderToggle) return;
 
   const enabled = state.filter === 'all';
+  const isActive = canReorder();
   els.reorderToggle.disabled = !enabled;
-  els.reorderToggle.setAttribute('aria-pressed', canReorder() ? 'true' : 'false');
-  els.reorderToggle.textContent = canReorder() ? 'Done Reordering' : 'Reorder';
+  els.reorderToggle.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  els.reorderToggle.classList.toggle('is-active', isActive);
+  els.reorderToggle.setAttribute('aria-label', isActive ? 'Finish reordering' : 'Reorder posts');
+  els.reorderToggle.title = isActive ? 'Finish reordering' : 'Reorder posts';
+
+  if (els.reorderIndicator) {
+    els.reorderIndicator.hidden = !isActive;
+  }
 }
 
 function cardImageMarkup(project) {
@@ -522,13 +529,14 @@ function galleryListRowMarkup(project) {
 }
 
 function renderGalleryViewToggle() {
-  const isCards = state.galleryView === 'cards';
-  if (els.viewCardsBtn) {
-    els.viewCardsBtn.setAttribute('aria-pressed', isCards ? 'true' : 'false');
-  }
-  if (els.viewListBtn) {
-    els.viewListBtn.setAttribute('aria-pressed', isCards ? 'false' : 'true');
-  }
+  if (!els.viewToggleBtn) return;
+  const currentView = state.galleryView === 'list' ? 'list' : 'cards';
+  const nextView = state.galleryView === 'cards' ? 'list' : 'cards';
+  const nextViewLabel = nextView === 'cards' ? 'cards' : 'list';
+  els.viewToggleBtn.dataset.view = currentView;
+  els.viewToggleBtn.setAttribute('aria-label', `Switch to ${nextViewLabel} view`);
+  els.viewToggleBtn.title = `Switch to ${nextViewLabel} view`;
+  els.viewToggleBtn.setAttribute('aria-pressed', state.galleryView === 'list' ? 'true' : 'false');
 }
 
 function renderGallery() {
@@ -1700,7 +1708,10 @@ async function syncSite() {
 
   if (els.syncBtn) {
     els.syncBtn.disabled = true;
-    els.syncBtn.textContent = 'Syncing...';
+    els.syncBtn.classList.add('is-busy');
+    els.syncBtn.setAttribute('aria-busy', 'true');
+    els.syncBtn.setAttribute('aria-label', 'Syncing site');
+    els.syncBtn.title = 'Syncing site';
   }
 
   try {
@@ -1732,7 +1743,10 @@ async function syncSite() {
   } finally {
     if (els.syncBtn) {
       els.syncBtn.disabled = false;
-      els.syncBtn.textContent = 'Sync';
+      els.syncBtn.classList.remove('is-busy');
+      els.syncBtn.removeAttribute('aria-busy');
+      els.syncBtn.setAttribute('aria-label', 'Sync site');
+      els.syncBtn.title = 'Sync site';
     }
   }
 }
@@ -2551,15 +2565,8 @@ function wireEvents() {
     renderGallery();
   });
 
-  els.viewCardsBtn?.addEventListener('click', () => {
-    if (state.galleryView === 'cards') return;
-    state.galleryView = 'cards';
-    renderGallery();
-  });
-
-  els.viewListBtn?.addEventListener('click', () => {
-    if (state.galleryView === 'list') return;
-    state.galleryView = 'list';
+  els.viewToggleBtn?.addEventListener('click', () => {
+    state.galleryView = state.galleryView === 'cards' ? 'list' : 'cards';
     renderGallery();
   });
 

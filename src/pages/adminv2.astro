@@ -4,9 +4,20 @@ import SiteLayout from '@components/SiteLayout.astro';
 
 <SiteLayout title="Raymondo Admin V2" description="Inline admin editing with homepage parity.">
   <main class="shell adminv2-root" id="adminV2Root" data-mode="gallery">
-    <header class="site-header">
-      <h1 class="brand">Raymondo</h1>
-      <nav class="site-nav">
+    <header class="site-header adminv2-site-header" id="adminv2SiteHeader">
+      <h1 class="brand adminv2-brand">Raymondo</h1>
+      <button
+        type="button"
+        class="adminv2-nav-toggle"
+        id="adminv2NavToggle"
+        aria-expanded="false"
+        aria-controls="adminv2SiteNav"
+        aria-label="Open navigation menu"
+      >
+        <span class="adminv2-nav-toggle-icon" aria-hidden="true"></span>
+        <span class="adminv2-nav-toggle-label">Menu</span>
+      </button>
+      <nav class="site-nav adminv2-site-nav" id="adminv2SiteNav">
         <a href="/admin" class="adminv2-nav-admin">Admin Classic</a>
         <a href="/adminv2" class="adminv2-nav-admin">Admin V2</a>
         <a href="/">View Site</a>
@@ -17,13 +28,43 @@ import SiteLayout from '@components/SiteLayout.astro';
       <div class="adminv2-toolbar">
         <p class="notice adminv2-toolbar-note">Create/Manage posts here.</p>
         <div class="adminv2-toolbar-actions">
-          <div class="adminv2-view-toggle" role="group" aria-label="Gallery layout">
-            <button type="button" class="btn secondary" id="adminv2ViewCardsBtn" aria-pressed="true">Cards</button>
-            <button type="button" class="btn secondary" id="adminv2ViewListBtn" aria-pressed="false">List</button>
-          </div>
-          <button type="button" class="btn secondary" id="adminv2AddNewBtn">Add New</button>
-          <button type="button" class="btn secondary" id="adminv2SyncBtn">Sync</button>
-          <button type="button" class="btn secondary" id="adminv2ReorderToggle" aria-pressed="false">Reorder</button>
+          <button type="button" class="btn secondary adminv2-tool-btn adminv2-view-toggle-btn" id="adminv2ViewToggleBtn" data-view="cards" aria-pressed="false" aria-label="Switch to list view" title="Switch to list view">
+            <svg class="adminv2-tool-icon adminv2-tool-icon-cards" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="7.5" height="7.5" rx="1.2"></rect>
+              <rect x="13.5" y="4" width="7.5" height="7.5" rx="1.2"></rect>
+              <rect x="3" y="12.5" width="7.5" height="7.5" rx="1.2"></rect>
+              <rect x="13.5" y="12.5" width="7.5" height="7.5" rx="1.2"></rect>
+            </svg>
+            <svg class="adminv2-tool-icon adminv2-tool-icon-list" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="5" y1="7" x2="19" y2="7"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <line x1="5" y1="17" x2="19" y2="17"></line>
+            </svg>
+          </button>
+          <button type="button" class="btn secondary adminv2-tool-btn" id="adminv2AddNewBtn" aria-label="Add new post" title="Add new post">
+            <svg class="adminv2-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+          </button>
+          <button type="button" class="btn secondary adminv2-tool-btn" id="adminv2SyncBtn" aria-label="Sync site" title="Sync site">
+            <svg class="adminv2-tool-icon adminv2-tool-icon-sync" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M3 12a9 9 0 0 1 15.5-6.4L21 8"></path>
+              <path d="M21 3v5h-5"></path>
+              <path d="M21 12a9 9 0 0 1-15.5 6.4L3 16"></path>
+              <path d="M3 21v-5h5"></path>
+            </svg>
+          </button>
+          <button type="button" class="btn secondary adminv2-tool-btn" id="adminv2ReorderToggle" aria-pressed="false" aria-label="Reorder posts" title="Reorder posts">
+            <svg class="adminv2-tool-icon adminv2-tool-icon-reorder" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="8" cy="7" r="1.2"></circle>
+              <circle cx="8" cy="12" r="1.2"></circle>
+              <circle cx="8" cy="17" r="1.2"></circle>
+              <circle cx="16" cy="7" r="1.2"></circle>
+              <circle cx="16" cy="12" r="1.2"></circle>
+              <circle cx="16" cy="17" r="1.2"></circle>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -34,6 +75,7 @@ import SiteLayout from '@components/SiteLayout.astro';
       </div>
 
       <p class="notice adminv2-feedback" id="adminv2Feedback" aria-live="polite"></p>
+      <p class="notice adminv2-reorder-indicator" id="adminv2ReorderIndicator" hidden>Reordering mode: drag posts to reorder</p>
       <div class="gallery-grid adminv2-gallery-grid" id="adminv2GalleryGrid"></div>
     </section>
 
@@ -139,4 +181,61 @@ import SiteLayout from '@components/SiteLayout.astro';
     type="module"
     src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
   ></script>
+  <script is:inline>
+    (() => {
+      const header = document.getElementById('adminv2SiteHeader');
+      const toggle = document.getElementById('adminv2NavToggle');
+      const nav = document.getElementById('adminv2SiteNav');
+      if (!header || !toggle || !nav) return;
+
+      const mobileQuery = window.matchMedia('(max-width: 760px)');
+
+      const setMenuState = (isOpen) => {
+        header.classList.toggle('is-nav-open', isOpen);
+        document.body.classList.toggle('adminv2-mobile-nav-open', isOpen && mobileQuery.matches);
+        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+      };
+
+      toggle.addEventListener('click', () => {
+        const isOpen = header.classList.contains('is-nav-open');
+        setMenuState(!isOpen);
+      });
+
+      nav.querySelectorAll('a').forEach((link) => {
+        link.addEventListener('click', () => {
+          if (mobileQuery.matches) setMenuState(false);
+        });
+      });
+
+      nav.addEventListener('click', (event) => {
+        if (!mobileQuery.matches) return;
+        if (event.target === nav) {
+          setMenuState(false);
+        }
+      });
+
+      document.addEventListener('click', (event) => {
+        if (!mobileQuery.matches || !header.classList.contains('is-nav-open')) return;
+        if (!(event.target instanceof Node) || header.contains(event.target)) return;
+        setMenuState(false);
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (event.key !== 'Escape') return;
+        if (!header.classList.contains('is-nav-open')) return;
+        setMenuState(false);
+      });
+
+      const handleViewportChange = () => {
+        if (!mobileQuery.matches) setMenuState(false);
+      };
+
+      if (typeof mobileQuery.addEventListener === 'function') {
+        mobileQuery.addEventListener('change', handleViewportChange);
+      } else if (typeof mobileQuery.addListener === 'function') {
+        mobileQuery.addListener(handleViewportChange);
+      }
+    })();
+  </script>
 </SiteLayout>
