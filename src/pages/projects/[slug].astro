@@ -19,6 +19,23 @@ const moodboard = imageAssets.filter((asset) => !cover || asset.id !== cover.id)
 const hasModelHero = project.discipline === '3d' && Boolean(modelAsset);
 const showsCoverImage = Boolean(cover) && !hasModelHero;
 const moodboardLightboxOffset = showsCoverImage ? 1 : 0;
+const normalizeText = (value) => String(value ?? '').replace(/\u00a0/g, ' ').trim();
+const themeInspiration = normalizeText(project.themeInspiration);
+const styleDirection = normalizeText(project.styleDirection);
+const typographyNotes = normalizeText(project.typographyNotes);
+const motifSummary = normalizeText(project.motifSummary);
+const toolingNotes = normalizeText(project.toolingNotes);
+const materialNotes = normalizeText(project.materialNotes);
+const palette = (Array.isArray(project.palette) ? project.palette : [])
+  .map((color) => String(color ?? '').trim())
+  .filter(Boolean);
+const hasMetadataPanel =
+  Boolean(themeInspiration) ||
+  Boolean(styleDirection) ||
+  Boolean(typographyNotes) ||
+  Boolean(motifSummary) ||
+  (project.discipline === '3d' && (Boolean(toolingNotes) || Boolean(materialNotes))) ||
+  palette.length > 0;
 const lightboxImages = [
   ...(showsCoverImage && cover ? [cover] : []),
   ...moodboard
@@ -33,9 +50,19 @@ const templateClass = `template-${project.styleTemplate}`;
 
 <SiteLayout title={`${project.title} | Raymondo`} description={project.descriptionShort}>
   <main class={`project-shell ${templateClass}`}>
-    <header class="site-header">
+    <header class="site-header" data-mobile-nav>
       <h1 class="brand"><a href="/" style="text-decoration:none;">Raymondo</a></h1>
-      <nav class="site-nav">
+      <button
+        type="button"
+        class="mobile-nav-toggle"
+        data-mobile-nav-toggle
+        aria-expanded="false"
+        aria-controls="projectSiteNav"
+        aria-label="Open navigation menu"
+      >
+        <span class="mobile-nav-toggle-icon" aria-hidden="true"></span>
+      </button>
+      <nav class="site-nav" id="projectSiteNav" data-mobile-nav-panel>
         <a href="/">Back to Work</a>
         <a href="mailto:raymondartguy@gmail.com">Contact</a>
       </nav>
@@ -51,7 +78,7 @@ const templateClass = `template-${project.styleTemplate}`;
       <p>{project.descriptionLong || project.descriptionShort}</p>
     </section>
 
-    <section class="project-layout">
+    <section class={`project-layout${hasMetadataPanel ? '' : ' project-layout-single'}`}>
       <article class="project-main">
         <div class="media-stage">
           {
@@ -73,51 +100,60 @@ const templateClass = `template-${project.styleTemplate}`;
         </div>
       </article>
 
-      <aside class="project-panel">
-        <div class="panel-block">
-          <h3>Inspiration & Theme</h3>
-          <p>{project.themeInspiration || 'Add inspiration details in admin to enrich this section.'}</p>
-        </div>
+      {hasMetadataPanel && (
+        <aside class="project-panel">
+          {themeInspiration && (
+            <div class="panel-block">
+              <h3>Inspiration & Theme</h3>
+              <p>{themeInspiration}</p>
+            </div>
+          )}
 
-        <div class="panel-block">
-          <h3>Design DNA</h3>
-          <p>{project.styleDirection || 'No style direction notes yet.'}</p>
-        </div>
+          {styleDirection && (
+            <div class="panel-block">
+              <h3>Design DNA</h3>
+              <p>{styleDirection}</p>
+            </div>
+          )}
 
-        <div class="panel-block">
-          <h3>Typography Notes</h3>
-          <p>{project.typographyNotes || 'No typography notes yet.'}</p>
-        </div>
+          {typographyNotes && (
+            <div class="panel-block">
+              <h3>Typography Notes</h3>
+              <p>{typographyNotes}</p>
+            </div>
+          )}
 
-        <div class="panel-block">
-          <h3>Motif Summary</h3>
-          <p>{project.motifSummary || 'No motif notes yet.'}</p>
-        </div>
+          {motifSummary && (
+            <div class="panel-block">
+              <h3>Motif Summary</h3>
+              <p>{motifSummary}</p>
+            </div>
+          )}
 
-        {project.discipline === '3d' && (
-          <>
+          {project.discipline === '3d' && toolingNotes && (
             <div class="panel-block">
               <h3>Tooling</h3>
-              <p>{project.toolingNotes || 'No tooling details yet.'}</p>
+              <p>{toolingNotes}</p>
             </div>
+          )}
+
+          {project.discipline === '3d' && materialNotes && (
             <div class="panel-block">
               <h3>Material Notes</h3>
-              <p>{project.materialNotes || 'No material notes yet.'}</p>
+              <p>{materialNotes}</p>
             </div>
-          </>
-        )}
+          )}
 
-        <div class="panel-block">
-          <h3>Palette</h3>
-          <div class="palette">
-            {project.palette.length > 0 ? (
-              project.palette.map((color) => <span class="swatch" style={`background:${color}`} title={color}></span>)
-            ) : (
-              <p>No palette colors set.</p>
-            )}
-          </div>
-        </div>
-      </aside>
+          {palette.length > 0 && (
+            <div class="panel-block">
+              <h3>Palette</h3>
+              <div class="palette">
+                {palette.map((color) => <span class="swatch" style={`background:${color}`} title={color}></span>)}
+              </div>
+            </div>
+          )}
+        </aside>
+      )}
     </section>
 
     {moodboard.length > 0 && (

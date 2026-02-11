@@ -83,9 +83,9 @@ const state = {
   },
   ui: {
     feedbackTimer: null,
+    saveChipTimer: null,
     activeAssetId: null,
-    dragImageAssetId: null,
-    armedPaletteDeleteColor: null
+    dragImageAssetId: null
   }
 };
 
@@ -120,6 +120,7 @@ const els = {
   paletteDialog: document.getElementById('adminv2PaletteDialog'),
   paletteCloseBtn: document.getElementById('adminv2ClosePaletteBtn'),
   paletteDialogList: document.getElementById('adminv2PaletteDialogList'),
+  paletteDialogInput: document.getElementById('adminv2PaletteDialogInput'),
   paletteDialogPicker: document.getElementById('adminv2PaletteDialogPicker'),
   paletteAddBtn: document.getElementById('adminv2AddPaletteBtn'),
   fileInput: document.getElementById('adminv2FileInput'),
@@ -179,6 +180,22 @@ function sanitizeSwatchColor(value) {
   return null;
 }
 
+function normalizeHexColor(value) {
+  const token = String(value || '').trim().replace(/^#/, '').toLowerCase();
+  if (!token) return null;
+  if (/^[0-9a-f]{3}$/.test(token)) {
+    const expanded = token
+      .split('')
+      .map((char) => char + char)
+      .join('');
+    return `#${expanded}`;
+  }
+  if (/^[0-9a-f]{6}$/.test(token)) {
+    return `#${token}`;
+  }
+  return null;
+}
+
 function toNumber(value, fallback = 0) {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
@@ -232,9 +249,26 @@ function setSaveState(stateName, textOverride = '') {
       error: 'Save failed'
     }[stateName] || 'All changes saved';
 
+  clearTimeout(state.ui.saveChipTimer);
   els.saveChip.textContent = copy;
   els.saveChip.classList.remove('saved', 'saving', 'unsaved', 'error');
   els.saveChip.classList.add(stateName);
+
+  const shouldShow = stateName === 'saving' || stateName === 'saved' || stateName === 'error';
+  if (!shouldShow) {
+    els.saveChip.classList.add('is-hidden');
+    return;
+  }
+
+  els.saveChip.classList.remove('is-hidden');
+
+  if (stateName === 'saving') return;
+
+  const hideDelay = stateName === 'error' ? 3000 : 1300;
+  state.ui.saveChipTimer = setTimeout(() => {
+    if (!els.saveChip) return;
+    els.saveChip.classList.add('is-hidden');
+  }, hideDelay);
 }
 
 function clearFeedback() {
@@ -406,9 +440,6 @@ function applyModeToView() {
     }
   });
 
-  if (els.saveChip) {
-    els.saveChip.classList.toggle('is-hidden', !isDetail);
-  }
 }
 
 function renderFilterState() {
@@ -446,7 +477,19 @@ function cardImageMarkup(project) {
     return `<img src="${escapeHtml(project.coverUrl)}" alt="${escapeHtml(alt)}" loading="lazy" />`;
   }
 
-  return '<div class="card-empty">No cover yet</div>';
+  return `
+    <div class="card-empty adminv2-card-empty">
+      <span class="adminv2-card-empty-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <rect x="3.5" y="5" width="17" height="14" rx="2.3"></rect>
+          <circle cx="9" cy="10" r="1.5"></circle>
+          <path d="M6.5 16l4.2-4.2L14 15l2.3-2.3 2.2 2.3"></path>
+        </svg>
+      </span>
+      <span class="adminv2-card-empty-title">No cover yet</span>
+      <span class="adminv2-card-empty-hint">Open post to add one</span>
+    </div>
+  `;
 }
 
 function cardTagsMarkup(project) {
@@ -509,7 +552,17 @@ function galleryListRowMarkup(project) {
   const thumb =
     project.coverUrl && normalizeString(project.coverUrl)
       ? `<img src="${escapeHtml(project.coverUrl)}" alt="${escapeHtml(normalizeString(project.coverAltText || project.title || 'Thumbnail'))}" loading="lazy" />`
-      : '<span class="adminv2-row-thumb-empty">No image</span>';
+      : `
+        <span class="adminv2-row-thumb-empty" aria-hidden="true">
+          <span class="adminv2-row-thumb-empty-icon">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <rect x="4" y="5.5" width="16" height="13" rx="2"></rect>
+              <path d="M7 15l3.6-3.6L13.7 14.5l2.1-2.1L18 14.6"></path>
+            </svg>
+          </span>
+          <span class="adminv2-row-thumb-empty-label">No cover</span>
+        </span>
+      `;
 
   return `
     <article
@@ -851,10 +904,17 @@ function renderHeroMedia(project, cover, hasModelHero, modelAsset, posterAsset) 
       class="adminv2-media-plus"
       data-action="add-asset"
       ${state.upload.busy ? 'disabled' : ''}
-      aria-label="Add asset"
+      aria-label="Add cover image"
     >
-      <span>+</span>
-      <small>Add Asset</small>
+      <span class="adminv2-media-plus-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" focusable="false">
+          <rect x="3.5" y="5" width="17" height="14" rx="2.3"></rect>
+          <circle cx="9" cy="10" r="1.5"></circle>
+          <path d="M6.5 16l4.2-4.2L14 15l2.3-2.3 2.2 2.3"></path>
+        </svg>
+      </span>
+      <span class="adminv2-media-plus-title">Add cover image</span>
+      <small>Upload or choose from assets</small>
     </button>
   `;
 }
@@ -901,7 +961,7 @@ function renderMoodboard(project, moodboard) {
 
   return `
     <section>
-      <h2 style="font-family:var(--font-display);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;margin:1.2rem 0 0.7rem;">
+      <h2 style="font-family:var(--font-display);font-size:1rem;letter-spacing:0.08em;text-transform:uppercase;margin:2rem 0 0.7rem;">
         Moodboard / Supporting Frames
       </h2>
       <div class="moodboard adminv2-moodboard">
@@ -1033,7 +1093,12 @@ function renderDetailTagEditor(project) {
     <span class="adminv2-post-tag-editor">
       ${tagMarkup}
       <button type="button" class="adminv2-meta-edit-btn" data-action="open-tag-dialog" title="Edit tags" aria-label="Edit tags">
-        &#9998;
+        <span class="adminv2-meta-edit-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 20h4.2l10-10a1.8 1.8 0 0 0 0-2.6l-1.8-1.8a1.8 1.8 0 0 0-2.6 0l-10 10V20z"></path>
+            <path d="m12.7 6.3 5 5"></path>
+          </svg>
+        </span>
       </button>
     </span>
   `;
@@ -1056,7 +1121,12 @@ function renderDetailPaletteEditor(project) {
     <div class="adminv2-palette-editor">
       <div class="adminv2-palette-list">${swatchMarkup}</div>
       <button type="button" class="adminv2-meta-edit-btn" data-action="open-palette-dialog" title="Edit palette" aria-label="Edit palette">
-        &#9998;
+        <span class="adminv2-meta-edit-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" focusable="false">
+            <path d="M4 20h4.2l10-10a1.8 1.8 0 0 0 0-2.6l-1.8-1.8a1.8 1.8 0 0 0-2.6 0l-10 10V20z"></path>
+            <path d="m12.7 6.3 5 5"></path>
+          </svg>
+        </span>
       </button>
     </div>
   `;
@@ -1075,6 +1145,24 @@ function renderStatusTag(project) {
       data-action="toggle-status"
       title="${actionLabel}"
       aria-label="${actionLabel}"
+    >
+      ${label}
+    </button>
+  `;
+}
+
+function renderDisciplineTag(project) {
+  const is3d = project.discipline === '3d';
+  const label = is3d ? '3D Project' : 'Graphic Project';
+  const nextLabel = is3d ? 'Graphic Project' : '3D Project';
+
+  return `
+    <button
+      type="button"
+      class="tag adminv2-discipline-pill"
+      data-action="toggle-discipline"
+      title="Switch to ${nextLabel}"
+      aria-label="Switch discipline to ${nextLabel}"
     >
       ${label}
     </button>
@@ -1101,24 +1189,24 @@ function renderDetail() {
     ? project.styleTemplate
     : 'editorial';
   const templateClass = `template-${activeTemplate}`;
-  const disciplineLabel = project.discipline === '3d' ? '3D Project' : 'Graphic Project';
   const yearTag = project.year ? `<span class="tag">${escapeHtml(project.year)}</span>` : '';
   const statusTag = renderStatusTag(project);
+  const disciplineTag = renderDisciplineTag(project);
 
   const descriptionFallback = project.descriptionShort || 'No description yet.';
 
   els.detailMount.innerHTML = `
     <main class="project-shell ${escapeHtml(templateClass)} adminv2-project-shell">
       <section class="project-hero">
+        ${renderStyleTemplateControl()}
         <p class="tag-row adminv2-post-tag-row">
           ${statusTag}
-          <span class="tag">${disciplineLabel}</span>
+          ${disciplineTag}
           ${yearTag}
           ${renderDetailTagEditor(project)}
         </p>
         <div class="adminv2-hero-head">
           ${renderDetailTitle(project)}
-          ${renderStyleTemplateControl()}
         </div>
         ${renderEditableParagraph('descriptionLong', project.descriptionLong || '', descriptionFallback)}
       </section>
@@ -2016,6 +2104,17 @@ async function toggleProjectStatus() {
   );
 }
 
+async function toggleProjectDiscipline() {
+  if (!state.activeProject) return;
+
+  const nextDiscipline = state.activeProject.discipline === '3d' ? 'graphic' : '3d';
+  state.activeProject.discipline = nextDiscipline;
+  await saveImmediateProjectPatch(
+    { discipline: nextDiscipline },
+    { rerender: true, successMessage: `Discipline set to ${nextDiscipline === '3d' ? '3D' : 'Graphic'}.` }
+  );
+}
+
 function renderTagDialog() {
   if (!els.tagDialogList) return;
   if (!state.activeProject) {
@@ -2122,19 +2221,22 @@ function renderPaletteDialog() {
 
   els.paletteDialogList.innerHTML = palette
     .map((color) => {
-      const isArmed = String(state.ui.armedPaletteDeleteColor || '').toLowerCase() === String(color).toLowerCase();
+      const normalized = normalizeHexColor(color) || String(color || '').trim();
       return `
-      <button
-        type="button"
-        class="adminv2-palette-remove ${isArmed ? 'is-armed' : ''}"
-        data-action="toggle-palette-delete"
-        data-color="${escapeHtml(color)}"
-        title="${isArmed ? `Click again to delete ${escapeHtml(color)}` : `Select ${escapeHtml(color)} for delete`}"
-        aria-label="${isArmed ? `Click again to delete color ${escapeHtml(color)}` : `Select color ${escapeHtml(color)} for delete`}"
-      >
+      <div class="adminv2-palette-row">
         <span class="swatch adminv2-meta-swatch" style="background:${escapeHtml(color)}"></span>
-        <span class="adminv2-palette-remove-icon" aria-hidden="true">×</span>
-      </button>
+        <span class="adminv2-palette-row-hex">${escapeHtml(normalized)}</span>
+        <button
+          type="button"
+          class="btn secondary adminv2-palette-row-delete"
+          data-action="remove-palette-color"
+          data-color="${escapeHtml(color)}"
+          title="Delete ${escapeHtml(normalized)}"
+          aria-label="Delete color ${escapeHtml(normalized)}"
+        >
+          Delete
+        </button>
+      </div>
     `;
     })
     .join('');
@@ -2145,22 +2247,24 @@ function openPaletteDialog() {
     setFeedback('Select a post first.', { type: 'warn', scope: 'detail' });
     return;
   }
-  state.ui.armedPaletteDeleteColor = null;
   renderPaletteDialog();
   const dialog = els.paletteDialog;
   if (!(dialog instanceof HTMLDialogElement)) return;
+  if (els.paletteDialogInput instanceof HTMLInputElement && els.paletteDialogPicker instanceof HTMLInputElement) {
+    els.paletteDialogInput.value = normalizeHexColor(els.paletteDialogPicker.value || '') || '#d65c3b';
+  }
   if (!dialog.open) {
     dialog.showModal();
   }
   window.setTimeout(() => {
-    if (els.paletteDialogPicker instanceof HTMLInputElement) {
-      els.paletteDialogPicker.focus();
+    if (els.paletteDialogInput instanceof HTMLInputElement) {
+      els.paletteDialogInput.focus();
+      els.paletteDialogInput.select();
     }
   }, 0);
 }
 
 function closePaletteDialog() {
-  state.ui.armedPaletteDeleteColor = null;
   const dialog = els.paletteDialog;
   if (!(dialog instanceof HTMLDialogElement)) return;
   if (dialog.open) {
@@ -2168,14 +2272,26 @@ function closePaletteDialog() {
   }
 }
 
-async function addPaletteColorFromDialogPicker() {
-  if (!state.activeProject) return;
+function syncPaletteInputFromPicker() {
   if (!(els.paletteDialogPicker instanceof HTMLInputElement)) return;
+  if (!(els.paletteDialogInput instanceof HTMLInputElement)) return;
+  const normalized = normalizeHexColor(els.paletteDialogPicker.value || '');
+  if (!normalized) return;
+  els.paletteDialogInput.value = normalized;
+}
 
-  const picked = sanitizeSwatchColor(els.paletteDialogPicker.value || '');
+async function addPaletteColorFromDialogInput() {
+  if (!state.activeProject) return;
+  if (!(els.paletteDialogInput instanceof HTMLInputElement)) return;
+
+  const picked = normalizeHexColor(els.paletteDialogInput.value || '');
   if (!picked) {
-    setFeedback('Pick a valid color.', { type: 'warn', scope: 'detail' });
+    setFeedback('Enter a valid hex color like #d65c3b.', { type: 'warn', scope: 'detail' });
     return;
+  }
+
+  if (els.paletteDialogPicker instanceof HTMLInputElement) {
+    els.paletteDialogPicker.value = picked;
   }
 
   const nextPalette = uniqueTokens([...(state.activeProject.palette || []), picked], { caseInsensitive: true });
@@ -2186,7 +2302,7 @@ async function addPaletteColorFromDialogPicker() {
   }
 
   state.activeProject.palette = nextPalette;
-  state.ui.armedPaletteDeleteColor = null;
+  els.paletteDialogInput.value = '';
   await saveImmediateProjectPatch({ palette: nextPalette }, { rerender: true, successMessage: 'Palette updated.' });
   renderPaletteDialog();
 }
@@ -2201,7 +2317,6 @@ async function removePaletteColor(color) {
   if (nextPalette.length === currentPalette.length) return;
 
   state.activeProject.palette = nextPalette;
-  state.ui.armedPaletteDeleteColor = null;
   await saveImmediateProjectPatch({ palette: nextPalette }, { rerender: true, successMessage: 'Palette updated.' });
   renderPaletteDialog();
 }
@@ -2307,6 +2422,14 @@ function onDetailClick(event) {
   if (action === 'toggle-status') {
     event.preventDefault();
     toggleProjectStatus().catch((error) => {
+      setFeedback(error.message, { type: 'error', scope: 'detail', timeout: 7000 });
+    });
+    return;
+  }
+
+  if (action === 'toggle-discipline') {
+    event.preventDefault();
+    toggleProjectDiscipline().catch((error) => {
       setFeedback(error.message, { type: 'error', scope: 'detail', timeout: 7000 });
     });
     return;
@@ -2476,30 +2599,22 @@ function onPaletteDialogClick(event) {
   if (!actionNode) return;
 
   const action = String(actionNode.dataset.action || '');
-  if (action === 'toggle-palette-delete') {
+  if (action === 'remove-palette-color') {
     event.preventDefault();
     const color = String(actionNode.dataset.color || '').trim();
     if (!color) return;
-
-    const armed = String(state.ui.armedPaletteDeleteColor || '').toLowerCase();
-    if (armed === color.toLowerCase()) {
-      removePaletteColor(color).catch((error) => {
-        setFeedback(error.message, { type: 'error', scope: 'detail', timeout: 7000 });
-      });
-      return;
-    }
-
-    state.ui.armedPaletteDeleteColor = color;
-    renderPaletteDialog();
+    removePaletteColor(color).catch((error) => {
+      setFeedback(error.message, { type: 'error', scope: 'detail', timeout: 7000 });
+    });
   }
 }
 
 function onPaletteDialogKeyDown(event) {
   if (event.key !== 'Enter') return;
-  if (event.target !== els.paletteDialogPicker) return;
+  if (event.target !== els.paletteDialogInput && event.target !== els.paletteDialogPicker) return;
 
   event.preventDefault();
-  addPaletteColorFromDialogPicker().catch((error) => {
+  addPaletteColorFromDialogInput().catch((error) => {
     setFeedback(error.message, { type: 'error', scope: 'detail', timeout: 7000 });
   });
 }
@@ -2662,9 +2777,30 @@ function wireEvents() {
   });
 
   els.paletteAddBtn?.addEventListener('click', () => {
-    addPaletteColorFromDialogPicker().catch((error) => {
+    addPaletteColorFromDialogInput().catch((error) => {
       setFeedback(error.message, { type: 'error', scope: 'detail', timeout: 7000 });
     });
+  });
+
+  els.paletteDialogPicker?.addEventListener('input', syncPaletteInputFromPicker);
+
+  els.paletteDialogInput?.addEventListener('input', () => {
+    if (!(els.paletteDialogInput instanceof HTMLInputElement)) return;
+    const normalized = normalizeHexColor(els.paletteDialogInput.value || '');
+    if (normalized && els.paletteDialogPicker instanceof HTMLInputElement) {
+      els.paletteDialogPicker.value = normalized;
+    }
+  });
+
+  els.paletteDialogInput?.addEventListener('change', () => {
+    if (!(els.paletteDialogInput instanceof HTMLInputElement)) return;
+    const normalized = normalizeHexColor(els.paletteDialogInput.value || '');
+    if (normalized) {
+      els.paletteDialogInput.value = normalized;
+      if (els.paletteDialogPicker instanceof HTMLInputElement) {
+        els.paletteDialogPicker.value = normalized;
+      }
+    }
   });
 
   els.paletteDialog?.addEventListener('click', (event) => {

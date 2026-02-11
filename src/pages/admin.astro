@@ -7,9 +7,19 @@ const yearOptions = Array.from({ length: currentYear - 1989 }, (_, index) => cur
 
 <SiteLayout title="Raymondo Admin" description="Admin dashboard for Raymondo portfolio content.">
   <main class="admin-shell admin-v3-shell" id="adminV3Root" data-mobile-tab="posts">
-    <header class="site-header admin-v3-header">
+    <header class="site-header admin-v3-header" data-mobile-nav>
       <h1 class="brand">Raymondo Admin</h1>
-      <nav class="site-nav">
+      <button
+        type="button"
+        class="mobile-nav-toggle"
+        data-mobile-nav-toggle
+        aria-expanded="false"
+        aria-controls="adminSiteNav"
+        aria-label="Open navigation menu"
+      >
+        <span class="mobile-nav-toggle-icon" aria-hidden="true"></span>
+      </button>
+      <nav class="site-nav" id="adminSiteNav" data-mobile-nav-panel>
         <a href="/admin" class="adminv2-nav-admin">Admin Classic</a>
         <a href="/adminv2" class="adminv2-nav-admin">Admin V2</a>
         <a href="/">View Site</a>

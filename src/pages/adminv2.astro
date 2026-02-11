@@ -4,20 +4,19 @@ import SiteLayout from '@components/SiteLayout.astro';
 
 <SiteLayout title="Raymondo Admin V2" description="Inline admin editing with homepage parity.">
   <main class="shell adminv2-root" id="adminV2Root" data-mode="gallery">
-    <header class="site-header adminv2-site-header" id="adminv2SiteHeader">
+    <header class="site-header adminv2-site-header" id="adminv2SiteHeader" data-mobile-nav>
       <h1 class="brand adminv2-brand">Raymondo</h1>
       <button
         type="button"
-        class="adminv2-nav-toggle"
-        id="adminv2NavToggle"
+        class="mobile-nav-toggle"
+        data-mobile-nav-toggle
         aria-expanded="false"
         aria-controls="adminv2SiteNav"
         aria-label="Open navigation menu"
       >
-        <span class="adminv2-nav-toggle-icon" aria-hidden="true"></span>
-        <span class="adminv2-nav-toggle-label">Menu</span>
+        <span class="mobile-nav-toggle-icon" aria-hidden="true"></span>
       </button>
-      <nav class="site-nav adminv2-site-nav" id="adminv2SiteNav">
+      <nav class="site-nav adminv2-site-nav" id="adminv2SiteNav" data-mobile-nav-panel>
         <a href="/admin" class="adminv2-nav-admin">Admin Classic</a>
         <a href="/adminv2" class="adminv2-nav-admin">Admin V2</a>
         <a href="/">View Site</a>
@@ -57,12 +56,15 @@ import SiteLayout from '@components/SiteLayout.astro';
           </button>
           <button type="button" class="btn secondary adminv2-tool-btn" id="adminv2ReorderToggle" aria-pressed="false" aria-label="Reorder posts" title="Reorder posts">
             <svg class="adminv2-tool-icon adminv2-tool-icon-reorder" viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="8" cy="7" r="1.2"></circle>
-              <circle cx="8" cy="12" r="1.2"></circle>
-              <circle cx="8" cy="17" r="1.2"></circle>
-              <circle cx="16" cy="7" r="1.2"></circle>
-              <circle cx="16" cy="12" r="1.2"></circle>
-              <circle cx="16" cy="17" r="1.2"></circle>
+              <path d="M12 4v16"></path>
+              <path d="M9.4 6.6 12 4l2.6 2.6"></path>
+              <path d="M9.4 17.4 12 20l2.6-2.6"></path>
+              <line x1="5" y1="8" x2="7.6" y2="8"></line>
+              <line x1="5" y1="12" x2="7.6" y2="12"></line>
+              <line x1="5" y1="16" x2="7.6" y2="16"></line>
+              <line x1="16.4" y1="8" x2="19" y2="8"></line>
+              <line x1="16.4" y1="12" x2="19" y2="12"></line>
+              <line x1="16.4" y1="16" x2="19" y2="16"></line>
             </svg>
           </button>
         </div>
@@ -91,7 +93,7 @@ import SiteLayout from '@components/SiteLayout.astro';
   </main>
 
   <input id="adminv2FileInput" type="file" multiple hidden />
-  <div class="adminv2-save-chip saved" id="adminv2SaveChip" aria-live="polite">All changes saved</div>
+  <div class="adminv2-save-chip saved is-hidden" id="adminv2SaveChip" aria-live="polite">All changes saved</div>
   <dialog id="adminv2CoverDialog" class="adminv2-dialog">
     <article class="adminv2-dialog-card">
       <header class="adminv2-dialog-head">
@@ -148,7 +150,7 @@ import SiteLayout from '@components/SiteLayout.astro';
         Add Tags
         <input
           id="adminv2TagDialogInput"
-          class="adminv2-meta-input"
+          class="adminv2-meta-input adminv2-tag-dialog-input"
           type="text"
           placeholder="identity, editorial, 3d"
         />
@@ -166,10 +168,24 @@ import SiteLayout from '@components/SiteLayout.astro';
       </header>
       <div class="adminv2-meta-group">
         <h4>Current Colors</h4>
-        <div class="adminv2-token-list" id="adminv2PaletteDialogList"></div>
+        <div class="adminv2-palette-dialog-list" id="adminv2PaletteDialogList"></div>
       </div>
       <div class="adminv2-palette-controls">
-        <input type="color" class="adminv2-palette-picker" id="adminv2PaletteDialogPicker" value="#d65c3b" aria-label="Pick palette color" />
+        <input
+          id="adminv2PaletteDialogInput"
+          class="adminv2-meta-input adminv2-palette-hex-input"
+          type="text"
+          inputmode="text"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          placeholder="#d65c3b"
+          aria-label="Add hex color"
+        />
+        <label class="adminv2-palette-picker-wrap" for="adminv2PaletteDialogPicker" title="Color picker">
+          <span class="adminv2-palette-picker-label">Pick</span>
+          <input type="color" class="adminv2-palette-picker" id="adminv2PaletteDialogPicker" value="#d65c3b" aria-label="Pick palette color" />
+        </label>
         <button type="button" class="btn secondary" id="adminv2AddPaletteBtn">Add Color</button>
       </div>
     </article>
@@ -181,61 +197,4 @@ import SiteLayout from '@components/SiteLayout.astro';
     type="module"
     src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js"
   ></script>
-  <script is:inline>
-    (() => {
-      const header = document.getElementById('adminv2SiteHeader');
-      const toggle = document.getElementById('adminv2NavToggle');
-      const nav = document.getElementById('adminv2SiteNav');
-      if (!header || !toggle || !nav) return;
-
-      const mobileQuery = window.matchMedia('(max-width: 760px)');
-
-      const setMenuState = (isOpen) => {
-        header.classList.toggle('is-nav-open', isOpen);
-        document.body.classList.toggle('adminv2-mobile-nav-open', isOpen && mobileQuery.matches);
-        toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
-      };
-
-      toggle.addEventListener('click', () => {
-        const isOpen = header.classList.contains('is-nav-open');
-        setMenuState(!isOpen);
-      });
-
-      nav.querySelectorAll('a').forEach((link) => {
-        link.addEventListener('click', () => {
-          if (mobileQuery.matches) setMenuState(false);
-        });
-      });
-
-      nav.addEventListener('click', (event) => {
-        if (!mobileQuery.matches) return;
-        if (event.target === nav) {
-          setMenuState(false);
-        }
-      });
-
-      document.addEventListener('click', (event) => {
-        if (!mobileQuery.matches || !header.classList.contains('is-nav-open')) return;
-        if (!(event.target instanceof Node) || header.contains(event.target)) return;
-        setMenuState(false);
-      });
-
-      document.addEventListener('keydown', (event) => {
-        if (event.key !== 'Escape') return;
-        if (!header.classList.contains('is-nav-open')) return;
-        setMenuState(false);
-      });
-
-      const handleViewportChange = () => {
-        if (!mobileQuery.matches) setMenuState(false);
-      };
-
-      if (typeof mobileQuery.addEventListener === 'function') {
-        mobileQuery.addEventListener('change', handleViewportChange);
-      } else if (typeof mobileQuery.addListener === 'function') {
-        mobileQuery.addListener(handleViewportChange);
-      }
-    })();
-  </script>
 </SiteLayout>

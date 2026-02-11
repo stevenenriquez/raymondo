@@ -22,5 +22,89 @@ const {
   </head>
   <body>
     <slot />
+    <script is:inline>
+      (() => {
+        const headers = Array.from(document.querySelectorAll('[data-mobile-nav]'));
+        if (!headers.length) return;
+
+        const mobileQuery = window.matchMedia('(max-width: 760px)');
+
+        const setBodyLock = () => {
+          const anyOpen = mobileQuery.matches && headers.some((header) => header.classList.contains('is-nav-open'));
+          document.body.classList.toggle('mobile-nav-open', anyOpen);
+        };
+
+        const setHeaderState = (header, isOpen) => {
+          const toggle = header.querySelector('[data-mobile-nav-toggle]');
+          if (!(toggle instanceof HTMLElement)) return;
+          header.classList.toggle('is-nav-open', isOpen);
+          toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+          toggle.setAttribute('aria-label', isOpen ? 'Close navigation menu' : 'Open navigation menu');
+          setBodyLock();
+        };
+
+        const closeAll = () => {
+          headers.forEach((header) => setHeaderState(header, false));
+        };
+
+        headers.forEach((header) => {
+          const toggle = header.querySelector('[data-mobile-nav-toggle]');
+          const nav = header.querySelector('[data-mobile-nav-panel]');
+          if (!(toggle instanceof HTMLElement) || !(nav instanceof HTMLElement)) return;
+
+          toggle.addEventListener('click', () => {
+            const isOpen = header.classList.contains('is-nav-open');
+            headers.forEach((otherHeader) => {
+              if (otherHeader !== header) setHeaderState(otherHeader, false);
+            });
+            setHeaderState(header, !isOpen);
+          });
+
+          nav.querySelectorAll('a').forEach((link) => {
+            link.addEventListener('click', () => {
+              if (mobileQuery.matches) setHeaderState(header, false);
+            });
+          });
+
+          nav.addEventListener('click', (event) => {
+            if (!mobileQuery.matches) return;
+            if (event.target === nav) {
+              setHeaderState(header, false);
+            }
+          });
+        });
+
+        document.addEventListener('click', (event) => {
+          if (!mobileQuery.matches || !(event.target instanceof Node)) return;
+          headers.forEach((header) => {
+            if (!header.classList.contains('is-nav-open')) return;
+            if (!header.contains(event.target)) {
+              setHeaderState(header, false);
+            }
+          });
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key !== 'Escape') return;
+          closeAll();
+        });
+
+        const handleViewportChange = () => {
+          if (!mobileQuery.matches) {
+            closeAll();
+          } else {
+            setBodyLock();
+          }
+        };
+
+        if (typeof mobileQuery.addEventListener === 'function') {
+          mobileQuery.addEventListener('change', handleViewportChange);
+        } else if (typeof mobileQuery.addListener === 'function') {
+          mobileQuery.addListener(handleViewportChange);
+        }
+
+        handleViewportChange();
+      })();
+    </script>
   </body>
 </html>

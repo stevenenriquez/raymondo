@@ -8,9 +8,19 @@ const projects = getPublishedProjects();
 
 <SiteLayout title="Raymondo Portfolio" description="Graphic and 3D design portfolio for Raymondo.">
   <main class="shell">
-    <header class="site-header">
+    <header class="site-header" data-mobile-nav>
       <h1 class="brand">Raymondo</h1>
-      <nav class="site-nav">
+      <button
+        type="button"
+        class="mobile-nav-toggle"
+        data-mobile-nav-toggle
+        aria-expanded="false"
+        aria-controls="homeSiteNav"
+        aria-label="Open navigation menu"
+      >
+        <span class="mobile-nav-toggle-icon" aria-hidden="true"></span>
+      </button>
+      <nav class="site-nav" id="homeSiteNav" data-mobile-nav-panel>
         <a href="#work">Work</a>
         <a href="#about">About</a>
         <a href="mailto:raymondartguy@gmail.com">Contact</a>
